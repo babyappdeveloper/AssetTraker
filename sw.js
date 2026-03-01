@@ -1,9 +1,11 @@
-const CACHE_NAME = 'wealth-tracker-v1';
+const CACHE_NAME = 'wealth-tracker-v2';
+const BASE = '/AssetTraker';
 const ASSETS = [
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
+  BASE + '/',
+  BASE + '/index.html',
+  BASE + '/manifest.json',
+  BASE + '/icon-192.png',
+  BASE + '/icon-512.png'
 ];
 
 self.addEventListener('install', event => {
