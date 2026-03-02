@@ -178,7 +178,24 @@ canvas{width:100% !important;}
 .rate-value{font-size:14px;font-weight:700;font-family:'Space Mono',monospace;color:var(--accent);}
 .rate-time{font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+@keyframes spin{to{transform:rotate(360deg);}}
 .rate-loading{animation:pulse 1.5s infinite;color:var(--text-muted);font-size:11px;}
+
+/* 수량 입력 */
+.qty-input{background:var(--bg);border:1px solid var(--border);border-radius:6px;
+  padding:5px 5px;color:var(--text);font-size:16px;font-family:'Space Mono',monospace;
+  text-align:center;outline:none;width:100%;transition:border-color .2s;}
+.qty-input:focus{border-color:var(--gold);}
+.qty-input::placeholder{color:var(--text-muted);font-size:9px;}
+/* 평균 매입가 */
+.avg-input{background:var(--bg);border:1px solid rgba(245,158,11,.2);border-radius:6px;
+  padding:4px 5px;color:var(--text-dim);font-size:16px;font-family:'Space Mono',monospace;
+  text-align:center;outline:none;width:100%;transition:border-color .2s;}
+.avg-input:focus{border-color:var(--gold);color:var(--text);}
+.avg-input::placeholder{color:var(--text-muted);font-size:9px;}
+/* 시세 자동 조회된 금액 */
+.edit-row.auto-priced{border-color:rgba(0,212,255,.15);}
+.edit-row.auto-priced .edit-amount-input{color:var(--accent);}
 
 .type-filter-bar{margin-bottom:13px;}
 .type-filter-label{font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;
@@ -204,8 +221,8 @@ canvas{width:100% !important;}
   transition:all .2s;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;}
 .btn-outline:hover{border-color:var(--accent);color:var(--accent);}
 
-.edit-row{display:grid;grid-template-columns:1fr 70px 118px 26px;
-  align-items:center;gap:7px;padding:8px 11px;background:var(--surface2);
+.edit-row{display:grid;grid-template-columns:1fr 60px 72px 68px 24px;
+  align-items:start;gap:6px;padding:8px 11px;background:var(--surface2);
   border-radius:9px;margin-bottom:5px;border:1px solid transparent;}
 .edit-row-name{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   cursor:pointer;color:var(--text);}
@@ -226,8 +243,8 @@ canvas{width:100% !important;}
   color:var(--text);font-size:16px;font-weight:500;outline:none;width:100%;
   padding:1px 0;font-family:'Noto Sans KR',sans-serif;min-width:0;}
 .edit-name-input:focus{border-bottom-color:var(--accent);}
-.new-asset-row{display:grid;grid-template-columns:1fr 70px 118px 26px;
-  gap:7px;align-items:end;padding:9px 11px;
+.new-asset-row{display:grid;grid-template-columns:1fr 60px 72px 68px 24px;
+  gap:6px;align-items:start;padding:9px 11px;
   background:rgba(0,212,255,.04);border:1px dashed rgba(0,212,255,.2);
   border-radius:9px;margin-bottom:5px;}
 .new-name-input{background:var(--surface2);border:1px solid var(--border);border-radius:7px;
@@ -367,7 +384,7 @@ canvas{width:100% !important;}
   font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
 
 @media(max-width:400px){
-  .edit-row,.new-asset-row{grid-template-columns:1fr 60px 105px 24px;}
+  .edit-row,.new-asset-row{grid-template-columns:1fr 52px 62px 58px 20px;gap:4px;padding:7px 8px;}
   .forecast-grid{grid-template-columns:repeat(2,1fr);}
 }
 </style>
@@ -530,6 +547,14 @@ canvas{width:100% !important;}
 
   <div class="input-section">
     <div class="section-title">새 달 자산 기록</div>
+
+    <!-- 시세 조회 상태 배너 -->
+    <div id="priceFetchBanner" style="display:none;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.15);border-radius:10px;padding:10px 13px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+      <div id="priceFetchSpinner" style="width:14px;height:14px;border:2px solid rgba(0,212,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;"></div>
+      <div id="priceFetchMsg" style="font-size:11px;color:var(--text-dim);">시세 조회 중...</div>
+      <button id="priceFetchSkip" onclick="cancelPriceFetch()" style="margin-left:auto;background:none;border:none;color:var(--text-muted);font-size:11px;cursor:pointer;">건너뛰기</button>
+    </div>
+
     <div class="type-filter-bar">
       <div class="type-filter-label">자산 종류</div>
       <div class="type-tags" id="typeTagsBar"></div>
@@ -541,6 +566,19 @@ canvas{width:100% !important;}
       </div>
       <button class="btn-outline" onclick="loadLastMonth()">↓ 최근 달 불러오기</button>
     </div>
+
+    <!-- 컬럼 헤더 -->
+    <div style="display:grid;grid-template-columns:1fr 60px 72px 68px 24px;gap:6px;padding:0 11px;margin-bottom:4px;">
+      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;">자산명 / 티커</div>
+      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;">종류</div>
+      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;text-align:center;">수량 / 매입가</div>
+      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;text-align:right;">금액 / 모드</div>
+      <div></div>
+    </div>
+      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;text-align:right;">금액(원)</div>
+      <div></div>
+    </div>
+
     <div id="editRows"></div>
     <div class="btn-row">
       <button class="btn-outline" onclick="addNewAssetRow()">+ 자산 추가</button>
@@ -1117,6 +1155,11 @@ function switchTab(tab,el){
   if(tab==='portfolio'){renderDonutChart();renderMonthSelector();analyzePortfolio();}
   if(tab==='dashboard'){renderLineChart();renderForecast();}
   if(tab==='settings'){loadSettingsUI();}
+  if(tab==='input'){
+    // 이미 rows 로드된 상태면 시세만 갱신
+    const rows=document.querySelectorAll('.edit-row[data-name]');
+    if(rows.length>0) setTimeout(autoFetchPrices,300);
+  }
 }
 
 // ══ HEADER ══
@@ -1132,7 +1175,10 @@ async function fetchExchangeRate(){
   try{
     const r=await fetch('https://api.exchangerate-api.com/v4/latest/USD');
     const d=await r.json();
-    const usd=d.rates.KRW,jpy=d.rates.KRW/d.rates.JPY;
+    const usd=d.rates.KRW, jpy=d.rates.KRW/d.rates.JPY;
+    // 시세 계산용 캐시 업데이트
+    cachedRates.USD = usd;
+    cachedRates.JPY = jpy; // 원/1엔
     document.getElementById('rateUSD').textContent=Math.round(usd).toLocaleString('ko-KR')+'원';
     document.getElementById('rateJPY').textContent=(jpy*100).toFixed(0)+'원';
     document.getElementById('rateTime').textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
@@ -1293,21 +1339,27 @@ function renderAssetList(){
       <div class="asset-pct">${pct}%</div></div>`;});
 }
 
-// ══ AMOUNT INPUT HELPERS ══
-function bindAmountInput(inp,rawVal){
-  inp.value=rawVal>0?rawVal.toLocaleString('ko-KR'):'';
-  inp.dataset.raw=rawVal;
-  inp.addEventListener('focus',function(){this.value='';this.dataset.raw='0';});
-  inp.addEventListener('blur',function(){
-    const raw=parseInt(this.value.replace(/,/g,''))||0;this.dataset.raw=raw;
-    this.value=raw>0?raw.toLocaleString('ko-KR'):'';});
-  inp.addEventListener('input',function(){
+
+
+// ══ AMOUNT INPUT ══
+function bindAmountInput(inp, rawVal){
+  inp.value = rawVal>0 ? rawVal.toLocaleString('ko-KR') : '';
+  inp.dataset.raw = String(rawVal||0);
+  inp.addEventListener('focus', function(){ this.value=''; this.dataset.raw='0'; });
+  inp.addEventListener('blur', function(){
+    const raw=parseInt(this.value.replace(/,/g,''))||0;
+    this.dataset.raw=String(raw);
+    this.value=raw>0?raw.toLocaleString('ko-KR'):'';
+  });
+  inp.addEventListener('input', function(){
     const nums=this.value.replace(/[^0-9]/g,'');
     const c=this.selectionStart,pL=this.value.length;
-    if(nums){const f=parseInt(nums).toLocaleString('ko-KR');this.value=f;const diff=f.length-pL;
-      try{this.setSelectionRange(c+diff,c+diff);}catch(e){}}});
+    if(nums){const f=parseInt(nums).toLocaleString('ko-KR');this.value=f;
+      const diff=f.length-pL;try{this.setSelectionRange(c+diff,c+diff);}catch(e){}}
+  });
 }
-function makeTypeBtn(type,onChange){
+
+function makeTypeBtn(type, onChange){
   const color=getColor(type);
   const tc=BASE_TYPES.includes(type)?`type-${type}`:'';
   const ts=BASE_TYPES.includes(type)?'':`background:${color}22;color:${color}`;
@@ -1319,111 +1371,370 @@ function makeTypeBtn(type,onChange){
     const ntc=BASE_TYPES.includes(newType)?`type-${newType}`:'';
     const nts=BASE_TYPES.includes(newType)?'':`background:${c}22;color:${c}`;
     btn.className=`type-pick-btn ${ntc}`;btn.style=nts;
-    btn.querySelector('.tag-dot').style.background=c;btn.querySelector('.type-pick-label').textContent=newType;
+    btn.querySelector('.tag-dot').style.background=c;
+    btn.querySelector('.type-pick-label').textContent=newType;
     if(onChange)onChange(newType);
   }));
   return btn;
 }
 
-// ══ EDIT ROWS ══
-function makeEditRow(name,type,rawAmount){
-  const div=document.createElement('div');div.className='edit-row';
+// ══ TICKER MAP (이름 → 티커 자동 매핑) ══
+const TICKER_MAP = {
+  '엔비디아':'NVDA','테슬라':'TSLA','애플':'AAPL','마이크로소프트':'MSFT',
+  'TSMC':'TSM','알파벳':'GOOGL','아마존':'AMZN','메타':'META','넷플릭스':'NFLX',
+  '존스앤드존슨':'JNJ','일라이 릴리':'LLY','팔란티어':'PLTR','아이온큐':'IONQ',
+  '디파이언서 양자컴퓨터':'QTUM','아크 핀테크 혁신 ETF':'ARKF',
+  '미쓰비시상사':'8058.T','유나이티드헬스':'UNH','ASML':'ASML',
+  'AMD':'AMD','브로드컴':'AVGO','퍼스트 솔라':'FSLR','넥스트에라 에너지':'NEE',
+  'SK 하이닉스':'000660.KS','비트마인':'BTCM',
+  '비트코인':'BTC-USD','이더리움':'ETH-USD','리플':'XRP-USD','솔라나':'SOL-USD',
+  '금 주식':'GLD','금ETF':'GLD',
+};
+const COIN_IDS = {
+  'BTC-USD':'bitcoin','ETH-USD':'ethereum','XRP-USD':'ripple','SOL-USD':'solana',
+  '비트코인':'bitcoin','이더리움':'ethereum','리플':'ripple','솔라나':'solana',
+};
 
-  // 이름 셀 — 탭하면 인라인 input으로 전환
+// ══ ASSET META 저장소 ══
+// 구조: { "자산명": { ticker, qty, avgCost, currency, autoPrice } }
+let assetMeta = {};
+function loadAssetMeta(){ try{assetMeta=JSON.parse(localStorage.getItem('assetMeta')||'{}');}catch(e){} }
+function saveAssetMeta(){ localStorage.setItem('assetMeta',JSON.stringify(assetMeta)); }
+function getAssetMeta(name){ return assetMeta[name]||{ticker:'',qty:0,avgCost:0,currency:'USD',autoPrice:true}; }
+function setAssetMeta(name, patch){
+  assetMeta[name]={...getAssetMeta(name),...patch};
+  saveAssetMeta();
+}
+
+// 환율 캐시
+let cachedRates={USD:1380,JPY:9.2}; // 원/달러, 원/1엔
+
+// ══ 시세 조회 ══
+let fetchAbortCtrl=null;
+
+async function fetchStockPrice(ticker){
+  try{
+    const url=`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
+    const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const r=await fetch(proxy,{signal:fetchAbortCtrl?.signal,timeout:8000});
+    const d=await r.json();
+    const parsed=JSON.parse(d.contents);
+    return parsed?.chart?.result?.[0]?.meta?.regularMarketPrice||null;
+  }catch(e){return null;}
+}
+
+async function fetchCoinKRW(coinId){
+  try{
+    const r=await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=krw`,
+      {signal:fetchAbortCtrl?.signal});
+    const d=await r.json();
+    return d[coinId]?.krw||null;
+  }catch(e){return null;}
+}
+
+function cancelPriceFetch(){
+  if(fetchAbortCtrl)fetchAbortCtrl.abort();
+  setPriceBanner(false);
+}
+function setPriceBanner(show,msg=''){
+  const b=document.getElementById('priceFetchBanner');
+  b.style.display=show?'flex':'none';
+  if(show&&msg) document.getElementById('priceFetchMsg').textContent=msg;
+}
+
+async function autoFetchPrices(){
+  fetchAbortCtrl=new AbortController();
+  const rows=[...document.querySelectorAll('.edit-row[data-name]')];
+
+  // autoPrice가 켜진 것만, 수량이 있는 것만
+  const targets=rows.map(row=>{
+    const name=row.dataset.name;
+    const meta=getAssetMeta(name);
+    const autoToggle=row.querySelector('.auto-toggle');
+    const isAuto=autoToggle?autoToggle.dataset.on==='1':meta.autoPrice!==false;
+    const ticker=(row.querySelector('.ticker-input')?.value.trim())||meta.ticker||TICKER_MAP[name]||'';
+    const qty=parseFloat(row.querySelector('.qty-input')?.value)||0;
+    return {row,name,ticker,qty,isAuto};
+  }).filter(t=>t.isAuto&&t.ticker&&t.qty>0);
+
+  if(!targets.length){setPriceBanner(false);return;}
+  setPriceBanner(true,`시세 조회 중... 0/${targets.length}`);
+
+  let done=0;
+  for(const {row,name,ticker,qty} of targets){
+    if(fetchAbortCtrl.signal.aborted)break;
+    setPriceBanner(true,`시세 조회 중... (${done+1}/${targets.length})  ${name}`);
+
+    try{
+      const coinId=COIN_IDS[ticker]||COIN_IDS[name];
+      let krwEach=null,krwTotal=null,priceInfo='',usdPrice=null;
+
+      if(coinId){
+        krwEach=await fetchCoinKRW(coinId);
+        if(krwEach!=null){
+          krwTotal=Math.round(krwEach*qty);
+          priceInfo=`₩${Math.round(krwEach).toLocaleString()} × ${qty}`;
+          usdPrice=krwEach/cachedRates.USD;
+        }
+      } else {
+        usdPrice=await fetchStockPrice(ticker);
+        if(usdPrice!=null){
+          const isJPY=ticker.endsWith('.T');
+          const isKRW=ticker.endsWith('.KS');
+          const rate=isJPY?cachedRates.JPY:isKRW?1:cachedRates.USD;
+          krwTotal=Math.round(usdPrice*qty*rate);
+          const sym=isJPY?'¥':isKRW?'₩':'$';
+          priceInfo=`${sym}${usdPrice.toFixed(2)} × ${qty} (${Math.round(rate).toLocaleString()}원)`;
+        }
+      }
+
+      if(krwTotal!=null){
+        // 금액 업데이트
+        const amtInp=row.querySelector('.edit-amount-input');
+        amtInp.dataset.raw=String(krwTotal);
+        amtInp.value=krwTotal.toLocaleString('ko-KR');
+        amtInp.style.color='var(--accent)';
+        row.classList.add('auto-priced');
+
+        // 수익률 업데이트
+        const meta=getAssetMeta(name);
+        if(meta.avgCost>0&&usdPrice!=null){
+          updateProfitBadge(row,usdPrice,meta.avgCost,krwTotal,qty);
+        }
+
+        // 가격 배지
+        let badge=row.querySelector('.price-info-badge');
+        if(!badge){
+          badge=document.createElement('div');badge.className='price-info-badge';
+          row.querySelector('.edit-row-name-cell')?.appendChild(badge);
+        }
+        badge.textContent=priceInfo;
+        badge.style.cssText='font-size:9px;color:var(--accent);font-family:"Space Mono",monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;';
+
+        setAssetMeta(name,{ticker,qty,autoPrice:true});
+      }
+    }catch(e){}
+    done++;
+  }
+
+  if(!fetchAbortCtrl.signal.aborted){
+    setPriceBanner(false);
+    showToast(`✨ ${done}개 시세 업데이트 완료!`);
+  }
+}
+
+function updateProfitBadge(row,currentPrice,avgCost,krwTotal,qty){
+  const pctChange=((currentPrice-avgCost)/avgCost*100);
+  const profitKRW=Math.round((currentPrice-avgCost)*qty*cachedRates.USD);
+  const isUp=pctChange>=0;
+  let badge=row.querySelector('.profit-badge');
+  if(!badge){
+    badge=document.createElement('div');badge.className='profit-badge';
+    const nameCell=row.querySelector('.edit-row-name-cell');
+    nameCell?.appendChild(badge);
+  }
+  badge.textContent=`${isUp?'▲':'▼'}${Math.abs(pctChange).toFixed(1)}%  ${isUp?'+':''}${profitKRW.toLocaleString()}원`;
+  badge.style.cssText=`font-size:9px;font-family:'Space Mono',monospace;margin-top:1px;color:${isUp?'var(--green)':'var(--red)'};`;
+}
+
+// ══ EDIT ROW 생성 ══
+function makeEditRow(name,type,rawAmount){
+  const div=document.createElement('div');
+  div.className='edit-row';div.dataset.name=name;
+
+  const meta=getAssetMeta(name);
+  const ticker=meta.ticker||TICKER_MAP[name]||'';
+  const qty=meta.qty||0;
+  const avgCost=meta.avgCost||0;
+  const isAuto=meta.autoPrice!==false;
+
+  // ── 1. 이름 셀 (이름 + 티커 + 배지들) ──
   const nameCell=document.createElement('div');
   nameCell.className='edit-row-name-cell';
 
+  // 이름 (탭 → 편집)
   const nameSpan=document.createElement('div');
-  nameSpan.className='edit-row-name';
-  nameSpan.textContent=name;
-  nameSpan.title='탭해서 이름 수정';
-  nameSpan.style.cursor='pointer';
-
+  nameSpan.className='edit-row-name';nameSpan.textContent=name;
+  nameSpan.title='탭해서 이름 수정';nameSpan.style.cursor='pointer';
   nameSpan.addEventListener('click',()=>{
     const inp=document.createElement('input');
-    inp.type='text';
-    inp.className='edit-name-input';
-    inp.value=nameSpan.textContent;
-    inp.autocomplete='off';
-    nameCell.replaceChild(inp,nameSpan);
-    inp.focus();
-    inp.select();
+    inp.type='text';inp.className='edit-name-input';inp.value=nameSpan.textContent;inp.autocomplete='off';
+    nameCell.replaceChild(inp,nameSpan);inp.focus();inp.select();
     const finish=()=>{
       nameSpan.textContent=inp.value.trim()||nameSpan.textContent;
-      nameCell.replaceChild(nameSpan,inp);
+      nameCell.replaceChild(nameSpan,inp);div.dataset.name=nameSpan.textContent;
     };
     inp.addEventListener('blur',finish);
     inp.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key==='Tab')inp.blur();});
   });
 
-  nameCell.appendChild(nameSpan);
+  // 티커 입력
+  const tickerInp=document.createElement('input');
+  tickerInp.type='text';tickerInp.className='ticker-input';
+  tickerInp.value=ticker;tickerInp.placeholder='티커 예)NVDA';tickerInp.autocomplete='off';
+  tickerInp.style.cssText=`background:transparent;border:none;border-bottom:1px dashed rgba(100,116,139,.35);
+    color:var(--text-muted);font-size:9px;font-family:'Space Mono',monospace;
+    outline:none;width:100%;padding:1px 0;margin-top:2px;font-size:16px;transform:scale(0.6);
+    transform-origin:left;width:160%;`;
+  // scale trick으로 9px처럼 보이면서 zoom 방지
+  tickerInp.style.cssText=`background:transparent;border:none;border-bottom:1px dashed rgba(100,116,139,.35);
+    color:var(--text-muted);font-size:9px;font-family:'Space Mono',monospace;
+    outline:none;width:100%;padding:1px 0;margin-top:1px;`;
+  tickerInp.addEventListener('focus',function(){this.style.borderBottomColor='var(--gold)';this.style.color='var(--text-dim)';});
+  tickerInp.addEventListener('blur',function(){this.style.borderBottomColor='rgba(100,116,139,.35)';this.style.color='var(--text-muted)';});
 
-  // type btn
-  const typeCell=document.createElement('div');
-  typeCell.className='type-btn-cell';
+  nameCell.appendChild(nameSpan);
+  nameCell.appendChild(tickerInp);
+
+  // ── 2. 종류 ──
+  const typeCell=document.createElement('div');typeCell.className='type-btn-cell';
   typeCell.appendChild(makeTypeBtn(type));
 
-  // amount input
+  // ── 3. 수량 + 평균매입가 (세로 2줄) ──
+  const qtyWrap=document.createElement('div');
+  qtyWrap.style.cssText='display:flex;flex-direction:column;gap:2px;min-width:0;';
+
+  const qtyInp=document.createElement('input');
+  qtyInp.type='text';qtyInp.inputMode='decimal';qtyInp.className='qty-input';
+  qtyInp.value=qty>0?qty:'';qtyInp.placeholder='수량';qtyInp.autocomplete='off';
+
+  const avgInp=document.createElement('input');
+  avgInp.type='text';avgInp.inputMode='decimal';avgInp.className='avg-input';
+  avgInp.value=avgCost>0?avgCost:'';avgInp.placeholder='매입가';avgInp.autocomplete='off';
+  avgInp.title='평균 매입가 (달러/개)';
+
+  qtyWrap.appendChild(qtyInp);
+  qtyWrap.appendChild(avgInp);
+
+  // ── 4. 금액 + 자동토글 (세로 2줄) ──
+  const amtWrap=document.createElement('div');
+  amtWrap.style.cssText='display:flex;flex-direction:column;gap:2px;min-width:0;';
+
   const amtInp=document.createElement('input');
-  amtInp.type='text';
-  amtInp.inputMode='numeric';
-  amtInp.className='edit-amount-input';
+  amtInp.type='text';amtInp.inputMode='numeric';amtInp.className='edit-amount-input';
   amtInp.autocomplete='off';
   bindAmountInput(amtInp,rawAmount);
 
-  // del btn
+  // 자동/수동 토글
+  const autoBtn=document.createElement('button');
+  autoBtn.className='auto-toggle';
+  autoBtn.dataset.on=isAuto?'1':'0';
+  autoBtn.style.cssText=`background:none;border:none;font-size:9px;font-family:'Space Mono',monospace;
+    cursor:pointer;text-align:right;padding:0;width:100%;`;
+  const setAutoStyle=()=>{
+    const on=autoBtn.dataset.on==='1';
+    autoBtn.textContent=on?'⚡자동':'✏️수동';
+    autoBtn.style.color=on?'var(--accent)':'var(--text-muted)';
+    amtInp.style.opacity=on?'0.6':'1';
+    amtInp.readOnly=on;
+  };
+  setAutoStyle();
+  autoBtn.addEventListener('click',()=>{
+    autoBtn.dataset.on=autoBtn.dataset.on==='1'?'0':'1';
+    setAutoStyle();
+    setAssetMeta(name,{autoPrice:autoBtn.dataset.on==='1'});
+  });
+
+  amtWrap.appendChild(amtInp);
+  amtWrap.appendChild(autoBtn);
+
+  // ── 5. 삭제 ──
   const delBtn=document.createElement('button');
-  delBtn.className='edit-del-btn';
-  delBtn.textContent='✕';
+  delBtn.className='edit-del-btn';delBtn.textContent='✕';
   delBtn.addEventListener('click',()=>div.remove());
 
   div.appendChild(nameCell);
   div.appendChild(typeCell);
-  div.appendChild(amtInp);
+  div.appendChild(qtyWrap);
+  div.appendChild(amtWrap);
   div.appendChild(delBtn);
   return div;
 }
+
 function addNewAssetRow(){
   const el=document.getElementById('editRows');
   const div=document.createElement('div');div.className='edit-row new-asset-row';
-  div.innerHTML=`<input type="text" class="new-name-input" placeholder="자산명" autocomplete="off">
-    <div class="type-btn-cell"></div>
-    <input type="text" inputmode="numeric" class="edit-amount-input" placeholder="금액" autocomplete="off">
-    <button class="edit-del-btn" onclick="this.closest('.edit-row').remove()">✕</button>`;
-  div.querySelector('.type-btn-cell').appendChild(makeTypeBtn(ALL_TYPES[0]));
-  bindAmountInput(div.querySelector('.edit-amount-input'),0);
-  el.appendChild(div);div.querySelector('.new-name-input').focus();
+
+  const nameInp=document.createElement('input');
+  nameInp.type='text';nameInp.className='new-name-input';nameInp.placeholder='자산명';nameInp.autocomplete='off';
+
+  const typeCell=document.createElement('div');typeCell.className='type-btn-cell';
+  typeCell.appendChild(makeTypeBtn(ALL_TYPES[0]));
+
+  const qtyWrap=document.createElement('div');
+  qtyWrap.style.cssText='display:flex;flex-direction:column;gap:2px;';
+  const qtyInp=document.createElement('input');
+  qtyInp.type='text';qtyInp.inputMode='decimal';qtyInp.className='qty-input';
+  qtyInp.placeholder='수량';qtyInp.autocomplete='off';
+  const avgInp=document.createElement('input');
+  avgInp.type='text';avgInp.inputMode='decimal';avgInp.className='avg-input';
+  avgInp.placeholder='매입가($)';avgInp.autocomplete='off';
+  qtyWrap.appendChild(qtyInp);qtyWrap.appendChild(avgInp);
+
+  const amtWrap=document.createElement('div');
+  amtWrap.style.cssText='display:flex;flex-direction:column;gap:2px;';
+  const amtInp=document.createElement('input');
+  amtInp.type='text';amtInp.inputMode='numeric';amtInp.className='edit-amount-input';
+  amtInp.placeholder='금액';amtInp.autocomplete='off';
+  bindAmountInput(amtInp,0);
+  const autoBtn=document.createElement('div');
+  autoBtn.style.cssText='font-size:9px;color:var(--accent);font-family:"Space Mono",monospace;text-align:right;';
+  autoBtn.textContent='⚡자동';
+  amtWrap.appendChild(amtInp);amtWrap.appendChild(autoBtn);
+
+  const delBtn=document.createElement('button');
+  delBtn.className='edit-del-btn';delBtn.textContent='✕';
+  delBtn.addEventListener('click',()=>div.remove());
+
+  div.appendChild(nameInp);div.appendChild(typeCell);div.appendChild(qtyWrap);
+  div.appendChild(amtWrap);div.appendChild(delBtn);
+  el.appendChild(div);nameInp.focus();
 }
+
 function loadLastMonth(){
   const last=allData[allData.length-1];
   const el=document.getElementById('editRows');el.innerHTML='';
-  last.assets.forEach(asset=>el.appendChild(makeEditRow(asset.name,asset.type,asset.amount)));
+  last.assets.forEach(a=>el.appendChild(makeEditRow(a.name,a.type,a.amount)));
+  setTimeout(autoFetchPrices,500);
 }
+
 function saveNewMonth(){
   const dateInput=document.getElementById('inputDate').value;
   if(!dateInput){alert('날짜를 선택해주세요.');return;}
   const assets=[];let total=0;
-  document.querySelectorAll('.edit-row:not(.new-asset-row)').forEach(row=>{
-    // 이름: 편집 중(input)이거나 span 둘 다 지원
-    const nameInp=row.querySelector('.edit-name-input');
-    const nameSpan=row.querySelector('.edit-row-name');
-    const name=(nameInp?nameInp.value:nameSpan?.textContent)?.trim();
+
+  const collectRow=(row,isNew)=>{
+    let name;
+    if(isNew){name=row.querySelector('.new-name-input')?.value.trim();}
+    else{
+      const ni=row.querySelector('.edit-name-input');
+      const ns=row.querySelector('.edit-row-name');
+      name=(ni?ni.value:ns?.textContent)?.trim();
+    }
     const type=row.querySelector('.type-pick-btn')?.dataset.type;
     const inp=row.querySelector('.edit-amount-input');
     const amount=parseInt((inp?.dataset.raw||inp?.value||'0').toString().replace(/,/g,''))||0;
-    if(name&&type&&amount>0){assets.push({name,type,amount});total+=amount;}});
-  document.querySelectorAll('.edit-row.new-asset-row').forEach(row=>{
-    const name=row.querySelector('.new-name-input')?.value.trim();
-    const type=row.querySelector('.type-pick-btn')?.dataset.type;
-    const inp=row.querySelector('.edit-amount-input');
-    const amount=parseInt((inp?.dataset.raw||inp?.value||'0').toString().replace(/,/g,''))||0;
-    if(name&&type&&amount>0){assets.push({name,type,amount});total+=amount;}});
-  if(assets.length===0){alert('유효한 자산 정보를 입력해주세요.');return;}
+    // 메타 저장
+    const ticker=row.querySelector('.ticker-input')?.value.trim()||'';
+    const qty=parseFloat(row.querySelector('.qty-input')?.value)||0;
+    const avgCost=parseFloat(row.querySelector('.avg-input')?.value)||0;
+    const autoOn=row.querySelector('.auto-toggle')?.dataset.on==='1';
+    if(name&&ticker) setAssetMeta(name,{ticker,qty,avgCost,autoPrice:autoOn});
+    if(name&&type&&amount>0){assets.push({name,type,amount});total+=amount;}
+  };
+
+  document.querySelectorAll('.edit-row:not(.new-asset-row)').forEach(r=>collectRow(r,false));
+  document.querySelectorAll('.edit-row.new-asset-row').forEach(r=>collectRow(r,true));
+
+  if(!assets.length){alert('유효한 자산 정보를 입력해주세요.');return;}
   const d=new Date(dateInput);
   const label=`${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}`;
   const existing=allData.findIndex(x=>x.date===dateInput);
-  if(existing>=0){if(!confirm('같은 날짜가 있습니다. 덮어쓸까요?'))return;allData[existing]={date:dateInput,label,total,assets};}
-  else{allData.push({date:dateInput,label,total,assets});allData.sort((a,b)=>new Date(a.date)-new Date(b.date));}
+  if(existing>=0){if(!confirm('같은 날짜가 있습니다. 덮어쓸까요?'))return;
+    allData[existing]={date:dateInput,label,total,assets};}
+  else{allData.push({date:dateInput,label,total,assets});
+    allData.sort((a,b)=>new Date(a.date)-new Date(b.date));}
   selectedMonthIdx=allData.findIndex(x=>x.date===dateInput);
   saveExtraData();document.getElementById('editRows').innerHTML='';
   render();showToast('💾 저장되었습니다!');
@@ -1443,10 +1754,11 @@ function render(){
 }
 
 window.addEventListener('load',()=>{
-  loadCustomTypes();loadSavedData();loadGoal();
+  loadCustomTypes();loadSavedData();loadGoal();loadAssetMeta();
   renderHeader();setInterval(renderHeader,60000);
   document.getElementById('inputDate').value=new Date().toISOString().split('T')[0];
-  render();loadLastMonth();renderTypeTagsBar();fetchExchangeRate();
+  render();renderTypeTagsBar();
+  fetchExchangeRate().then(()=>loadLastMonth());
   setInterval(fetchExchangeRate,5*60*1000);
   if(settings.notifEnabled&&settings.goalAmount)scheduleNotification();
 });
