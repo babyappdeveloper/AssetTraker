@@ -1352,15 +1352,12 @@ async function fetchExchangeRate(){
 
 
 // ══ ISSUES PAGE ══
-// Vercel API 엔드포인트 — 배포 후 실제 URL로 교체하세요
-const VERCEL_API = 'https://wealth-tracker-api.vercel.app/api/issues';
-// ↑ Vercel 배포 후 프로젝트 URL로 변경 (예: https://my-project.vercel.app/api/issues)
-
-let issueCache = {};
+let issueCache = {};       // cacheKey → {items, ts}
 let issueActiveFilter = 'all';
 let issuesLoading = false;
 let issueAbortCtrl = null;
 
+// 보유 자산 목록 추출
 function getMyAssets(){
   const latest = allData[allData.length-1]?.assets || [];
   const result = [];
@@ -1368,22 +1365,86 @@ function getMyAssets(){
   latest.forEach(a => {
     if(seen.has(a.name)) return; seen.add(a.name);
     const meta = getAssetMeta(a.name);
-    result.push({ name: a.name, type: a.type, ticker: meta.ticker || TICKER_MAP[a.name] || '' });
+    const ticker = meta.ticker || TICKER_MAP[a.name] || '';
+    result.push({name:a.name, type:a.type, ticker});
   });
   return result;
 }
 
-async function loadIssues(forceRefresh = false) {
+// 자산별 검색 쿼리 매핑
+function getNewsQuery(asset){
+  const {name, type, ticker} = asset;
+  if(type==='코인' || COIN_IDS[ticker] || COIN_IDS[name]){
+    return `${name} 코인`;
+  }
+  if(type==='금' || name.includes('금')) return '금 시세 귀금속';
+  if(ticker && ticker.endsWith('.T')) return `${name} 주식 일본`;
+  if(ticker) return `${ticker} ${name}`;
+  return name;
+}
+
+// 고정 카테고리 쿼리
+const FIXED_QUERIES = [
+  {key:'market', label:'시장 전체', query:'미국증시 나스닥 S&P500', icon:'🌐', color:'#8b5cf6'},
+  {key:'fx',     label:'환율',     query:'원달러 환율 외환',       icon:'💱', color:'#06b6d4'},
+  {key:'gold',   label:'금·귀금속', query:'금 시세 귀금속',         icon:'🥇', color:'#eab308'},
+];
+
+// Google News RSS → allorigins 프록시 파싱
+async function fetchRSS(query, signal){
+  const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ko&gl=KR&ceid=KR:ko`;
+  const proxy  = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
+  try{
+    const r = await fetch(proxy, {signal});
+    const d = await r.json();
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(d.contents, 'text/xml');
+    const items = [...xml.querySelectorAll('item')].slice(0, 5);
+    return items.map(item => {
+      const title   = item.querySelector('title')?.textContent?.replace(/<[^>]+>/g,'').trim() || '';
+      const desc    = item.querySelector('description')?.textContent?.replace(/<[^>]+>/g,'').trim() || '';
+      const pubDate = item.querySelector('pubDate')?.textContent || '';
+      const source  = item.querySelector('source')?.textContent || 'Google News';
+      const link    = item.querySelector('link')?.textContent || '';
+      const date    = pubDate ? new Date(pubDate) : new Date();
+      return {title, desc, source, link, date, dateISO: date.toISOString().split('T')[0]};
+    });
+  }catch(e){ return []; }
+}
+
+// 제목 기반 감성 간단 분류
+function detectSentiment(text){
+  const pos = ['급등','상승','호재','돌파','신고가','성장','개선','호조','매수','긍정','기대','상향','회복','강세','오름'];
+  const neg = ['급락','하락','악재','우려','리스크','위험','손실','매도','부정','하향','둔화','약세','폭락','침체','내림'];
+  const t = text;
+  const ps = pos.filter(w=>t.includes(w)).length;
+  const ns = neg.filter(w=>t.includes(w)).length;
+  if(ps > ns) return 'pos';
+  if(ns > ps) return 'neg';
+  return 'neu';
+}
+
+// 중요도 판단 (제목 기반 휴리스틱)
+function detectImportance(text){
+  const high = ['급등','급락','폭등','폭락','실적','분기','연준','금리','파산','인수','합병','규제'];
+  const low  = ['전망','예상','분석','의견','리포트','보고서'];
+  if(high.some(w=>text.includes(w))) return 'high';
+  if(low.some(w=>text.includes(w)))  return 'low';
+  return 'mid';
+}
+
+async function loadIssues(forceRefresh=false){
   if(issuesLoading) return;
 
   const myAssets = getMyAssets();
   renderIssueFilterChips(myAssets);
 
-  const cacheKey = myAssets.map(a => a.name).join(',');
+  const cacheKey = myAssets.map(a=>a.name).join(',');
   const cached = issueCache[cacheKey];
-  if(!forceRefresh && cached && (Date.now() - cached.ts) < 15 * 60 * 1000) {
-    renderIssues(cached.issues);
-    updateIssueSubtitle(cached.ts, cached.issues.length, cached.isFallback);
+  if(!forceRefresh && cached && (Date.now()-cached.ts) < 15*60*1000){
+    renderIssues(cached.items);
+    document.getElementById('issueSubtitle').textContent =
+      `${new Date(cached.ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} 업데이트 · ${cached.items.length}건`;
     return;
   }
 
@@ -1392,199 +1453,186 @@ async function loadIssues(forceRefresh = false) {
   issueAbortCtrl = new AbortController();
 
   const btn = document.getElementById('issueRefreshBtn');
-  btn.textContent = '⏳ AI 분석 중...'; btn.disabled = true;
+  btn.textContent = '⏳ 조회 중...'; btn.disabled = true;
 
-  // 로딩 UI
+  // 로딩 스켈레톤
   const content = document.getElementById('issueContent');
-  content.innerHTML = `
-    <div style="text-align:center;padding:40px 20px;">
-      <div style="width:40px;height:40px;border:3px solid rgba(0,212,255,.15);border-top-color:var(--accent);
-        border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;"></div>
-      <div style="font-size:13px;font-weight:600;margin-bottom:6px;">AI가 뉴스를 수집하고 있어요</div>
-      <div style="font-size:11px;color:var(--text-muted);">보유 자산 뉴스 검색 → Claude AI 요약 중...</div>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">약 10~20초 소요됩니다</div>
-    </div>`;
+  content.innerHTML = '';
+  const allQueries = [
+    ...FIXED_QUERIES.map(q=>({...q, isFixed:true})),
+    ...myAssets.filter(a=>a.type==='주식'||a.type==='코인').map(a=>({
+      key:a.name, label:a.name, query:getNewsQuery(a), icon:a.type==='코인'?'₿':'📌',
+      color:getAssetTagColor(a.name), isFixed:false, assetName:a.name
+    }))
+  ];
+  allQueries.forEach(q=>{
+    const lc=document.createElement('div');lc.className='issue-loading-card';
+    lc.innerHTML=`<div class="issue-loading-spinner"></div>
+      <div style="font-size:11px;color:var(--text-muted)">${q.label} 뉴스 조회 중...</div>`;
+    content.appendChild(lc);
+  });
 
-  try {
-    const resp = await fetch(VERCEL_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assets: myAssets }),
-      signal: issueAbortCtrl.signal,
-    });
+  try{
+    const allItems = [];
+    for(const q of allQueries){
+      if(issueAbortCtrl.signal.aborted) break;
+      const items = await fetchRSS(q.query, issueAbortCtrl.signal);
+      items.forEach(item=>{
+        const sentiment  = detectSentiment(item.title+' '+item.desc);
+        const importance = detectImportance(item.title);
+        allItems.push({
+          ...item,
+          assetKey:   q.key,
+          assetLabel: q.label,
+          assetColor: q.color,
+          isFixed:    q.isFixed||false,
+          assetName:  q.assetName||null,
+          sentiment, importance,
+        });
+      });
+    }
 
-    if(!resp.ok) throw new Error(`서버 오류 (${resp.status})`);
-    const data = await resp.json();
-    const issues = data.issues || [];
+    // 날짜 내림차순 정렬, 중복 제목 제거
+    const seen = new Set();
+    const deduped = allItems
+      .sort((a,b)=>b.date-a.date)
+      .filter(item=>{ if(seen.has(item.title)){return false;} seen.add(item.title);return true; });
 
-    if(!issues.length) throw new Error('뉴스 데이터 없음');
+    issueCache[cacheKey] = {items:deduped, ts:Date.now()};
+    renderIssues(deduped);
+    document.getElementById('issueSubtitle').textContent =
+      `${new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} 업데이트 · ${deduped.length}건`;
 
-    issueCache[cacheKey] = { issues, ts: Date.now(), isFallback: data.fallback || false };
-    renderIssues(issues);
-    updateIssueSubtitle(Date.now(), issues.length, data.fallback);
-
-  } catch(e) {
-    if(e.name === 'AbortError') return;
-
-    // Vercel URL 미설정 안내
-    const isNotConfigured = VERCEL_API.includes('wealth-tracker-api.vercel.app');
-    content.innerHTML = `
-      <div style="padding:20px;">
-        ${isNotConfigured ? `
-        <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);
-          border-radius:12px;padding:16px;margin-bottom:14px;">
-          <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px;">⚙️ 설정이 필요해요</div>
-          <div style="font-size:11px;color:var(--text-dim);line-height:1.7;">
-            AI 요약을 사용하려면 Vercel 백엔드를 배포해야 해요.<br>
-            아래 설정 방법을 따라주세요.
-          </div>
-        </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;">
-          <div style="font-size:11px;font-weight:700;margin-bottom:10px;">📋 Vercel 배포 방법</div>
-          <div style="font-size:10px;color:var(--text-dim);line-height:2;">
-            1. <a href="https://vercel.com" target="_blank" style="color:var(--accent)">vercel.com</a>에서 무료 계정 생성<br>
-            2. 받은 <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">api/issues.js</code>와
-               <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">vercel.json</code> 업로드<br>
-            3. 환경변수 <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">ANTHROPIC_API_KEY</code> 추가<br>
-            4. 배포된 URL을 이 앱의 <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">VERCEL_API</code> 상수에 입력
-          </div>
-        </div>` : `
-        <div style="text-align:center;padding:20px 0;">
-          <div style="font-size:24px;margin-bottom:8px;">⚠️</div>
-          <div style="font-size:12px;margin-bottom:4px;">뉴스를 불러오지 못했어요</div>
-          <div style="font-size:10px;color:var(--text-muted)">${e.message}</div>
-          <button onclick="loadIssues(true)" style="margin-top:12px;padding:8px 18px;
-            background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);
-            border-radius:8px;color:var(--accent);font-size:11px;cursor:pointer;
-            font-family:'Noto Sans KR',sans-serif;">다시 시도</button>
-        </div>`}
-      </div>`;
-  } finally {
-    issuesLoading = false;
-    btn.textContent = '🔄 새로고침'; btn.disabled = false;
+  }catch(e){
+    if(e.name!=='AbortError'){
+      content.innerHTML=`<div style="text-align:center;padding:30px;color:var(--text-muted)">
+        <div style="font-size:24px;margin-bottom:8px">⚠️</div>
+        <div style="font-size:12px">뉴스를 불러오지 못했어요</div>
+        <div style="font-size:10px;margin-top:4px;opacity:.6">${e.message}</div>
+        <button onclick="loadIssues(true)" style="margin-top:12px;padding:7px 16px;
+          background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);
+          border-radius:8px;color:var(--accent);font-size:11px;cursor:pointer;
+          font-family:'Noto Sans KR',sans-serif;">다시 시도</button></div>`;
+    }
+  }finally{
+    issuesLoading=false;
+    btn.textContent='🔄 새로고침'; btn.disabled=false;
   }
 }
 
-function updateIssueSubtitle(ts, count, isFallback) {
-  const timeStr = new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-  const suffix = isFallback ? ' (AI 요약 미적용)' : ' · AI 요약';
-  document.getElementById('issueSubtitle').textContent =
-    `${timeStr} 업데이트 · ${count}건${suffix}`;
-}
+function renderIssueFilterChips(assets){
+  const bar=document.getElementById('issueFilterChips');
+  bar.innerHTML='';
 
-function renderIssueFilterChips(assets) {
-  const bar = document.getElementById('issueFilterChips');
-  bar.innerHTML = '';
-  const make = (label, key) => {
-    const btn = document.createElement('button');
-    btn.className = 'issue-filter-chip' + (issueActiveFilter === key ? ' active' : '');
-    btn.dataset.key = key;
-    btn.textContent = label;
-    btn.onclick = () => { issueActiveFilter = key; syncFilterChips(); filterIssueCards(); };
+  const make=(label,key,color)=>{
+    const btn=document.createElement('button');
+    btn.className='issue-filter-chip'+(issueActiveFilter===key?' active':'');
+    btn.dataset.key=key;
+    btn.style.setProperty('--chip-color', color||'var(--accent)');
+    btn.textContent=label;
+    btn.onclick=()=>{issueActiveFilter=key;syncFilterChips();filterIssueCards();};
     bar.appendChild(btn);
   };
-  make('전체', 'all');
-  make('🌐 시장', 'market');
-  make('💱 환율', 'fx');
-  make('🥇 금', 'gold');
-  const seen = new Set();
-  assets.filter(a => a.type === '주식' || a.type === '코인').forEach(a => {
-    if(seen.has(a.name)) return; seen.add(a.name);
-    make((a.type === '코인' ? '₿ ' : '') + a.name, a.name);
+  make('전체','all','var(--text-muted)');
+  make('📈 시장','market','#8b5cf6');
+  make('💱 환율','fx','#06b6d4');
+  make('🥇 금','gold','#eab308');
+  assets.filter(a=>a.type==='주식'||a.type==='코인').forEach(a=>{
+    make((a.type==='코인'?'₿ ':'')+a.name, a.name, getAssetTagColor(a.name));
   });
 }
 
-function syncFilterChips() {
-  document.querySelectorAll('.issue-filter-chip').forEach(c =>
-    c.classList.toggle('active', c.dataset.key === issueActiveFilter));
-}
-
-function filterIssueCards() {
-  document.querySelectorAll('.issue-card[data-asset-key]').forEach(card => {
-    card.style.display = (issueActiveFilter === 'all' || card.dataset.assetKey === issueActiveFilter) ? '' : 'none';
-  });
-  document.querySelectorAll('.issue-day-group').forEach(g => {
-    const vis = [...g.querySelectorAll('.issue-card')].some(c => c.style.display !== 'none');
-    g.style.display = vis ? '' : 'none';
+function syncFilterChips(){
+  document.querySelectorAll('.issue-filter-chip').forEach(c=>{
+    c.classList.toggle('active', c.dataset.key===issueActiveFilter);
   });
 }
 
-function renderIssues(issues) {
-  const content = document.getElementById('issueContent');
-  content.innerHTML = '';
+function filterIssueCards(){
+  document.querySelectorAll('.issue-card[data-asset-key]').forEach(card=>{
+    if(issueActiveFilter==='all'){ card.style.display=''; return; }
+    card.style.display = card.dataset.assetKey===issueActiveFilter?'':'none';
+  });
+  document.querySelectorAll('.issue-day-group').forEach(g=>{
+    const vis=[...g.querySelectorAll('.issue-card')].some(c=>c.style.display!=='none');
+    g.style.display=vis?'':'none';
+  });
+}
 
-  // 날짜별 그룹화
-  const byDate = {};
-  issues.forEach(item => {
-    const d = (item.date || new Date().toISOString()).split('T')[0];
-    if(!byDate[d]) byDate[d] = [];
+function renderIssues(items){
+  const content=document.getElementById('issueContent');
+  content.innerHTML='';
+  if(!items.length){
+    content.innerHTML='<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:12px">조회된 뉴스가 없어요</div>';
+    return;
+  }
+
+  // 날짜별 그룹
+  const byDate={};
+  items.forEach(item=>{
+    const d=item.dateISO||new Date().toISOString().split('T')[0];
+    if(!byDate[d])byDate[d]=[];
     byDate[d].push(item);
   });
 
   const today     = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const yesterday = new Date(Date.now()-86400000).toISOString().split('T')[0];
 
-  Object.keys(byDate).sort((a, b) => b.localeCompare(a)).forEach(date => {
-    const group = document.createElement('div');
-    group.className = 'issue-day-group';
+  Object.keys(byDate).sort((a,b)=>b.localeCompare(a)).forEach(date=>{
+    const group=document.createElement('div');
+    group.className='issue-day-group';
 
     let label;
-    if(date === today)          label = '오늘';
-    else if(date === yesterday) label = '어제';
-    else { const d = new Date(date); label = `${d.getMonth()+1}월 ${d.getDate()}일`; }
+    if(date===today)     label='오늘';
+    else if(date===yesterday) label='어제';
+    else{ const d=new Date(date); label=`${d.getMonth()+1}월 ${d.getDate()}일`; }
 
-    const dayLbl = document.createElement('div');
-    dayLbl.className = 'issue-day-label';
-    dayLbl.textContent = `── ${label}`;
+    const dayLbl=document.createElement('div');
+    dayLbl.className='issue-day-label';
+    dayLbl.textContent=`── ${label}`;
     group.appendChild(dayLbl);
 
-    byDate[date].forEach(item => {
-      const card = document.createElement('div');
-      card.className = 'issue-card';
-      card.dataset.assetKey = item.assetKey || 'market';
+    byDate[date].forEach(item=>{
+      const card=document.createElement('div');
+      card.className='issue-card';
+      card.dataset.assetKey=item.assetKey;
 
-      const impColor = { high: '#ef4444', mid: '#f59e0b', low: '#10b981' }[item.importance || 'mid'];
-      const sentMap  = { pos: { t: '호재', c: 'pos' }, neg: { t: '악재', c: 'neg' }, neu: { t: '중립', c: 'neu' } };
-      const sent     = sentMap[item.sentiment || 'neu'];
-      const tagColor = item.assetColor || 'var(--accent)';
+      const impColor={high:'#ef4444',mid:'#f59e0b',low:'#10b981'}[item.importance||'mid'];
+      const sentMap={pos:{t:'호재',c:'pos'},neg:{t:'악재',c:'neg'},neu:{t:'중립',c:'neu'}};
+      const sent=sentMap[item.sentiment||'neu'];
 
-      const hasSummary = item.summary && item.summary.length > 10;
+      // 시간 포맷
+      const timeStr=item.date instanceof Date && !isNaN(item.date)
+        ? item.date.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '';
 
-      card.innerHTML = `
+      card.innerHTML=`
         <div class="issue-card-header">
           <div class="issue-importance" style="background:${impColor}"></div>
           <div style="flex:1;min-width:0">
-            <div class="issue-title">${item.title || ''}</div>
+            <div class="issue-title">${item.title}</div>
           </div>
           <span class="issue-sentiment ${sent.c}">${sent.t}</span>
         </div>
         <div class="issue-asset-tags">
-          <span class="issue-asset-tag" style="background:${tagColor}1a;color:${tagColor}">
-            ${item.assetLabel || item.assetKey || ''}
-          </span>
+          <span class="issue-asset-tag" style="background:${item.assetColor}1a;color:${item.assetColor}">${item.assetLabel}</span>
         </div>
-        ${hasSummary
-          ? `<div class="issue-summary">${item.summary}</div>`
-          : item.desc ? `<div class="issue-summary" style="opacity:.7">${item.desc.slice(0, 160)}${item.desc.length > 160 ? '…' : ''}</div>` : ''
-        }
+        ${item.desc?`<div class="issue-summary">${item.desc.slice(0,140)}${item.desc.length>140?'…':''}</div>`:''}
         <div class="issue-meta">
-          <span class="issue-source">${item.source || ''}</span>
-          ${item.link ? `<a href="${item.link}" target="_blank" rel="noopener"
-            style="font-size:9px;color:var(--accent);text-decoration:none;font-family:'Space Mono',monospace;">원문 →</a>` : ''}
+          <span class="issue-source">${item.source}${timeStr?' · '+timeStr:''}</span>
+          ${item.link?`<a href="${item.link}" target="_blank" rel="noopener"
+            style="font-size:9px;color:var(--accent);text-decoration:none;font-family:'Space Mono',monospace;">원문 →</a>`:''}
         </div>`;
-
       group.appendChild(card);
     });
     content.appendChild(group);
   });
-
   filterIssueCards();
 }
 
-function getAssetTagColor(name) {
-  const map = { '주식': '#3b82f6', '코인': '#f59e0b', '금': '#eab308', '은': '#94a3b8',
-    'NVDA': '#76b900', 'TSLA': '#e31937', 'AAPL': '#6b7280', '비트코인': '#f7931a',
-    '이더리움': '#627eea', '시장': '#8b5cf6', '증시': '#8b5cf6' };
+function getAssetTagColor(name){
+  const map={'주식':'#3b82f6','코인':'#f59e0b','금':'#eab308','은':'#94a3b8',
+    'NVDA':'#76b900','TSLA':'#e31937','AAPL':'#6b7280','비트코인':'#f7931a',
+    '이더리움':'#627eea','시장':'#8b5cf6','증시':'#8b5cf6'};
   for(const k of Object.keys(map)) if(name.includes(k)) return map[k];
   return 'var(--accent)';
 }
