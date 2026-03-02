@@ -34,11 +34,11 @@ body::before{content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%
   background:rgba(17,24,39,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   border-top:1px solid var(--border);display:flex;z-index:1000;}
 .tab-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;cursor:pointer;border:none;background:transparent;color:var(--text-muted);
-  font-family:'Noto Sans KR',sans-serif;transition:color .2s;padding-top:8px;}
+  gap:2px;cursor:pointer;border:none;background:transparent;color:var(--text-muted);
+  font-family:'Noto Sans KR',sans-serif;transition:color .2s;padding-top:6px;}
 .tab-item.active{color:var(--accent);}
-.tab-icon{font-size:20px;line-height:1;}
-.tab-label{font-size:10px;font-weight:500;}
+.tab-icon{font-size:18px;line-height:1;}
+.tab-label{font-size:9px;font-weight:500;}
 
 /* PAGES */
 .page{display:none;position:relative;z-index:1;}
@@ -298,6 +298,39 @@ canvas{width:100% !important;}
 .notif-status{padding:8px 12px;border-radius:9px;font-size:11px;text-align:center;margin-top:10px;}
 .notif-status.ok{background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.2);}
 .notif-status.warn{background:rgba(245,158,11,.1);color:var(--gold);border:1px solid rgba(245,158,11,.2);}
+
+/* ── ISSUES PAGE ── */
+.issue-filter-chip{padding:5px 11px;border-radius:20px;font-size:10px;font-weight:600;
+  border:1px solid var(--border);background:var(--surface2);color:var(--text-muted);
+  cursor:pointer;transition:all .2s;font-family:'Noto Sans KR',sans-serif;}
+.issue-filter-chip.active{background:rgba(0,212,255,.12);border-color:var(--accent);color:var(--accent);}
+.issue-day-group{margin-bottom:18px;}
+.issue-day-label{font-size:10px;font-weight:700;color:var(--text-muted);
+  font-family:'Space Mono',monospace;letter-spacing:.5px;margin-bottom:8px;
+  padding:0 2px;}
+.issue-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:13px 14px;margin-bottom:8px;transition:border-color .2s;}
+.issue-card:hover{border-color:rgba(100,116,139,.4);}
+.issue-card-header{display:flex;align-items:flex-start;gap:8px;margin-bottom:7px;}
+.issue-importance{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.issue-importance.high{background:#ef4444;}
+.issue-importance.mid{background:#f59e0b;}
+.issue-importance.low{background:#10b981;}
+.issue-asset-tags{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:7px;}
+.issue-asset-tag{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:600;
+  font-family:'Space Mono',monospace;}
+.issue-title{font-size:12px;font-weight:600;line-height:1.5;color:var(--text);margin-bottom:5px;}
+.issue-summary{font-size:11px;color:var(--text-dim);line-height:1.65;}
+.issue-meta{display:flex;align-items:center;justify-content:space-between;margin-top:8px;}
+.issue-source{font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;}
+.issue-sentiment{font-size:9px;padding:2px 8px;border-radius:8px;font-weight:700;}
+.issue-sentiment.pos{background:rgba(16,185,129,.12);color:#10b981;}
+.issue-sentiment.neg{background:rgba(239,68,68,.12);color:#ef4444;}
+.issue-sentiment.neu{background:rgba(100,116,139,.12);color:var(--text-muted);}
+.issue-loading-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;}
+.issue-loading-spinner{width:16px;height:16px;border:2px solid rgba(0,212,255,.2);
+  border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
 
 /* ── MARKET PAGE ── */
 .market-section{background:var(--surface);border:1px solid var(--border);border-radius:14px;
@@ -605,6 +638,37 @@ canvas{width:100% !important;}
 </div>
 
 <!-- PAGE 4: 설정 -->
+<!-- PAGE: 이슈 -->
+<div class="page" id="page-issues">
+<div class="container" style="padding-top:14px">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div>
+      <div style="font-size:15px;font-weight:700;">📰 보유 자산 이슈</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px;" id="issueSubtitle">보유 자산 관련 최신 뉴스를 AI가 요약합니다</div>
+    </div>
+    <button onclick="loadIssues(true)" id="issueRefreshBtn"
+      style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);border-radius:10px;
+      color:var(--accent);font-size:11px;padding:7px 14px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;">
+      🔄 새로고침
+    </button>
+  </div>
+
+  <!-- 자산 필터 칩 -->
+  <div id="issueFilterChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;"></div>
+
+  <!-- 로딩/결과 영역 -->
+  <div id="issueContent">
+    <div style="text-align:center;padding:40px 20px;color:var(--text-muted);">
+      <div style="font-size:32px;margin-bottom:12px;">📰</div>
+      <div style="font-size:13px;margin-bottom:6px;">이슈 탭을 처음 열었어요</div>
+      <div style="font-size:11px;color:var(--text-muted);">위 새로고침 버튼을 눌러 보유 자산 이슈를 불러오세요</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
 <!-- PAGE: 자산 시세 -->
 <div class="page" id="page-market">
 <div class="container" style="padding-top:14px">
@@ -731,6 +795,9 @@ canvas{width:100% !important;}
   </button>
   <button class="tab-item" data-tab="market" onclick="switchTab('market',this)">
     <span class="tab-icon">📈</span><span class="tab-label">시세</span>
+  </button>
+  <button class="tab-item" data-tab="issues" onclick="switchTab('issues',this)">
+    <span class="tab-icon">📰</span><span class="tab-label">이슈</span>
   </button>
   <button class="tab-item" data-tab="input" onclick="switchTab('input',this)">
     <span class="tab-icon">✏️</span><span class="tab-label">입력</span>
@@ -1254,6 +1321,7 @@ function switchTab(tab,el){
   if(tab==='dashboard'){renderLineChart();renderForecast();}
   if(tab==='settings'){loadSettingsUI();}
   if(tab==='market'){loadMarketPage();}
+  if(tab==='issues'){loadIssues(false);}
   if(tab==='input'){
     // 이미 rows 로드된 상태면 시세만 갱신
     const rows=document.querySelectorAll('.edit-row[data-name]');
@@ -1282,6 +1350,244 @@ async function fetchExchangeRate(){
 }
 
 
+
+// ══ ISSUES PAGE ══
+// Vercel API 엔드포인트 — 배포 후 실제 URL로 교체하세요
+const VERCEL_API = 'https://wealth-tracker-api.vercel.app/api/issues';
+// ↑ Vercel 배포 후 프로젝트 URL로 변경 (예: https://my-project.vercel.app/api/issues)
+
+let issueCache = {};
+let issueActiveFilter = 'all';
+let issuesLoading = false;
+let issueAbortCtrl = null;
+
+function getMyAssets(){
+  const latest = allData[allData.length-1]?.assets || [];
+  const result = [];
+  const seen = new Set();
+  latest.forEach(a => {
+    if(seen.has(a.name)) return; seen.add(a.name);
+    const meta = getAssetMeta(a.name);
+    result.push({ name: a.name, type: a.type, ticker: meta.ticker || TICKER_MAP[a.name] || '' });
+  });
+  return result;
+}
+
+async function loadIssues(forceRefresh = false) {
+  if(issuesLoading) return;
+
+  const myAssets = getMyAssets();
+  renderIssueFilterChips(myAssets);
+
+  const cacheKey = myAssets.map(a => a.name).join(',');
+  const cached = issueCache[cacheKey];
+  if(!forceRefresh && cached && (Date.now() - cached.ts) < 15 * 60 * 1000) {
+    renderIssues(cached.issues);
+    updateIssueSubtitle(cached.ts, cached.issues.length, cached.isFallback);
+    return;
+  }
+
+  issuesLoading = true;
+  if(issueAbortCtrl) issueAbortCtrl.abort();
+  issueAbortCtrl = new AbortController();
+
+  const btn = document.getElementById('issueRefreshBtn');
+  btn.textContent = '⏳ AI 분석 중...'; btn.disabled = true;
+
+  // 로딩 UI
+  const content = document.getElementById('issueContent');
+  content.innerHTML = `
+    <div style="text-align:center;padding:40px 20px;">
+      <div style="width:40px;height:40px;border:3px solid rgba(0,212,255,.15);border-top-color:var(--accent);
+        border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;"></div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px;">AI가 뉴스를 수집하고 있어요</div>
+      <div style="font-size:11px;color:var(--text-muted);">보유 자산 뉴스 검색 → Claude AI 요약 중...</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">약 10~20초 소요됩니다</div>
+    </div>`;
+
+  try {
+    const resp = await fetch(VERCEL_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assets: myAssets }),
+      signal: issueAbortCtrl.signal,
+    });
+
+    if(!resp.ok) throw new Error(`서버 오류 (${resp.status})`);
+    const data = await resp.json();
+    const issues = data.issues || [];
+
+    if(!issues.length) throw new Error('뉴스 데이터 없음');
+
+    issueCache[cacheKey] = { issues, ts: Date.now(), isFallback: data.fallback || false };
+    renderIssues(issues);
+    updateIssueSubtitle(Date.now(), issues.length, data.fallback);
+
+  } catch(e) {
+    if(e.name === 'AbortError') return;
+
+    // Vercel URL 미설정 안내
+    const isNotConfigured = VERCEL_API.includes('wealth-tracker-api.vercel.app');
+    content.innerHTML = `
+      <div style="padding:20px;">
+        ${isNotConfigured ? `
+        <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);
+          border-radius:12px;padding:16px;margin-bottom:14px;">
+          <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px;">⚙️ 설정이 필요해요</div>
+          <div style="font-size:11px;color:var(--text-dim);line-height:1.7;">
+            AI 요약을 사용하려면 Vercel 백엔드를 배포해야 해요.<br>
+            아래 설정 방법을 따라주세요.
+          </div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;">
+          <div style="font-size:11px;font-weight:700;margin-bottom:10px;">📋 Vercel 배포 방법</div>
+          <div style="font-size:10px;color:var(--text-dim);line-height:2;">
+            1. <a href="https://vercel.com" target="_blank" style="color:var(--accent)">vercel.com</a>에서 무료 계정 생성<br>
+            2. 받은 <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">api/issues.js</code>와
+               <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">vercel.json</code> 업로드<br>
+            3. 환경변수 <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">ANTHROPIC_API_KEY</code> 추가<br>
+            4. 배포된 URL을 이 앱의 <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">VERCEL_API</code> 상수에 입력
+          </div>
+        </div>` : `
+        <div style="text-align:center;padding:20px 0;">
+          <div style="font-size:24px;margin-bottom:8px;">⚠️</div>
+          <div style="font-size:12px;margin-bottom:4px;">뉴스를 불러오지 못했어요</div>
+          <div style="font-size:10px;color:var(--text-muted)">${e.message}</div>
+          <button onclick="loadIssues(true)" style="margin-top:12px;padding:8px 18px;
+            background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);
+            border-radius:8px;color:var(--accent);font-size:11px;cursor:pointer;
+            font-family:'Noto Sans KR',sans-serif;">다시 시도</button>
+        </div>`}
+      </div>`;
+  } finally {
+    issuesLoading = false;
+    btn.textContent = '🔄 새로고침'; btn.disabled = false;
+  }
+}
+
+function updateIssueSubtitle(ts, count, isFallback) {
+  const timeStr = new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  const suffix = isFallback ? ' (AI 요약 미적용)' : ' · AI 요약';
+  document.getElementById('issueSubtitle').textContent =
+    `${timeStr} 업데이트 · ${count}건${suffix}`;
+}
+
+function renderIssueFilterChips(assets) {
+  const bar = document.getElementById('issueFilterChips');
+  bar.innerHTML = '';
+  const make = (label, key) => {
+    const btn = document.createElement('button');
+    btn.className = 'issue-filter-chip' + (issueActiveFilter === key ? ' active' : '');
+    btn.dataset.key = key;
+    btn.textContent = label;
+    btn.onclick = () => { issueActiveFilter = key; syncFilterChips(); filterIssueCards(); };
+    bar.appendChild(btn);
+  };
+  make('전체', 'all');
+  make('🌐 시장', 'market');
+  make('💱 환율', 'fx');
+  make('🥇 금', 'gold');
+  const seen = new Set();
+  assets.filter(a => a.type === '주식' || a.type === '코인').forEach(a => {
+    if(seen.has(a.name)) return; seen.add(a.name);
+    make((a.type === '코인' ? '₿ ' : '') + a.name, a.name);
+  });
+}
+
+function syncFilterChips() {
+  document.querySelectorAll('.issue-filter-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.key === issueActiveFilter));
+}
+
+function filterIssueCards() {
+  document.querySelectorAll('.issue-card[data-asset-key]').forEach(card => {
+    card.style.display = (issueActiveFilter === 'all' || card.dataset.assetKey === issueActiveFilter) ? '' : 'none';
+  });
+  document.querySelectorAll('.issue-day-group').forEach(g => {
+    const vis = [...g.querySelectorAll('.issue-card')].some(c => c.style.display !== 'none');
+    g.style.display = vis ? '' : 'none';
+  });
+}
+
+function renderIssues(issues) {
+  const content = document.getElementById('issueContent');
+  content.innerHTML = '';
+
+  // 날짜별 그룹화
+  const byDate = {};
+  issues.forEach(item => {
+    const d = (item.date || new Date().toISOString()).split('T')[0];
+    if(!byDate[d]) byDate[d] = [];
+    byDate[d].push(item);
+  });
+
+  const today     = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+  Object.keys(byDate).sort((a, b) => b.localeCompare(a)).forEach(date => {
+    const group = document.createElement('div');
+    group.className = 'issue-day-group';
+
+    let label;
+    if(date === today)          label = '오늘';
+    else if(date === yesterday) label = '어제';
+    else { const d = new Date(date); label = `${d.getMonth()+1}월 ${d.getDate()}일`; }
+
+    const dayLbl = document.createElement('div');
+    dayLbl.className = 'issue-day-label';
+    dayLbl.textContent = `── ${label}`;
+    group.appendChild(dayLbl);
+
+    byDate[date].forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'issue-card';
+      card.dataset.assetKey = item.assetKey || 'market';
+
+      const impColor = { high: '#ef4444', mid: '#f59e0b', low: '#10b981' }[item.importance || 'mid'];
+      const sentMap  = { pos: { t: '호재', c: 'pos' }, neg: { t: '악재', c: 'neg' }, neu: { t: '중립', c: 'neu' } };
+      const sent     = sentMap[item.sentiment || 'neu'];
+      const tagColor = item.assetColor || 'var(--accent)';
+
+      const hasSummary = item.summary && item.summary.length > 10;
+
+      card.innerHTML = `
+        <div class="issue-card-header">
+          <div class="issue-importance" style="background:${impColor}"></div>
+          <div style="flex:1;min-width:0">
+            <div class="issue-title">${item.title || ''}</div>
+          </div>
+          <span class="issue-sentiment ${sent.c}">${sent.t}</span>
+        </div>
+        <div class="issue-asset-tags">
+          <span class="issue-asset-tag" style="background:${tagColor}1a;color:${tagColor}">
+            ${item.assetLabel || item.assetKey || ''}
+          </span>
+        </div>
+        ${hasSummary
+          ? `<div class="issue-summary">${item.summary}</div>`
+          : item.desc ? `<div class="issue-summary" style="opacity:.7">${item.desc.slice(0, 160)}${item.desc.length > 160 ? '…' : ''}</div>` : ''
+        }
+        <div class="issue-meta">
+          <span class="issue-source">${item.source || ''}</span>
+          ${item.link ? `<a href="${item.link}" target="_blank" rel="noopener"
+            style="font-size:9px;color:var(--accent);text-decoration:none;font-family:'Space Mono',monospace;">원문 →</a>` : ''}
+        </div>`;
+
+      group.appendChild(card);
+    });
+    content.appendChild(group);
+  });
+
+  filterIssueCards();
+}
+
+function getAssetTagColor(name) {
+  const map = { '주식': '#3b82f6', '코인': '#f59e0b', '금': '#eab308', '은': '#94a3b8',
+    'NVDA': '#76b900', 'TSLA': '#e31937', 'AAPL': '#6b7280', '비트코인': '#f7931a',
+    '이더리움': '#627eea', '시장': '#8b5cf6', '증시': '#8b5cf6' };
+  for(const k of Object.keys(map)) if(name.includes(k)) return map[k];
+  return 'var(--accent)';
+}
 
 // ══ MARKET PAGE ══
 const MARKET_STOCKS_MAJOR = [
