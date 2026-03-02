@@ -221,12 +221,23 @@ canvas{width:100% !important;}
   transition:all .2s;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;}
 .btn-outline:hover{border-color:var(--accent);color:var(--accent);}
 
-.edit-row{display:grid;grid-template-columns:1fr 58px 70px 90px 22px;
-  align-items:start;gap:5px;padding:8px 10px;background:var(--surface2);
-  border-radius:9px;margin-bottom:5px;border:1px solid transparent;}
-.edit-row-name{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  cursor:pointer;color:var(--text);}
+.edit-row{display:grid;grid-template-columns:1fr 160px;
+  align-items:start;gap:8px;padding:9px 11px;background:var(--surface2);
+  border-radius:10px;margin-bottom:6px;border:1px solid transparent;}
+/* 왼쪽: 이름+티커+금액 묶음 */
+.edit-row-left{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.edit-row-name{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;cursor:pointer;color:var(--text);}
 .edit-row-name:hover{color:var(--accent);}
+.edit-row-name-cell{min-width:0;overflow:hidden;}
+/* 금액 인풋 — 왼쪽 셀 하단에 넓게 */
+.edit-amount-input{background:var(--bg);border:1px solid var(--border);border-radius:7px;
+  padding:5px 8px;color:var(--text);font-size:16px;font-family:'Space Mono',monospace;
+  text-align:right;outline:none;width:100%;transition:border-color .2s;}
+.edit-amount-input:focus{border-color:var(--accent);}
+/* 오른쪽: 종류+수량+매입가+모드+삭제 */
+.edit-row-right{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-items:start;}
+.edit-row-right-top{display:flex;gap:4px;align-items:center;grid-column:1/-1;}
 .edit-row-name-cell{min-width:0;overflow:hidden;}
 .type-pick-btn{display:flex;align-items:center;gap:4px;padding:4px 7px;
   border-radius:6px;border:1px solid rgba(255,255,255,.06);background:transparent;
@@ -243,10 +254,10 @@ canvas{width:100% !important;}
   color:var(--text);font-size:16px;font-weight:500;outline:none;width:100%;
   padding:1px 0;font-family:'Noto Sans KR',sans-serif;min-width:0;}
 .edit-name-input:focus{border-bottom-color:var(--accent);}
-.new-asset-row{display:grid;grid-template-columns:1fr 58px 70px 90px 22px;
-  gap:5px;align-items:start;padding:9px 10px;
+.new-asset-row{display:grid;grid-template-columns:1fr 160px;
+  gap:8px;align-items:start;padding:9px 11px;
   background:rgba(0,212,255,.04);border:1px dashed rgba(0,212,255,.2);
-  border-radius:9px;margin-bottom:5px;}
+  border-radius:10px;margin-bottom:6px;}
 .new-name-input{background:var(--surface2);border:1px solid var(--border);border-radius:7px;
   padding:7px 8px;color:var(--text);font-size:16px;outline:none;width:100%;
   font-family:'Noto Sans KR',sans-serif;transition:border-color .2s;}
@@ -410,7 +421,7 @@ canvas{width:100% !important;}
   font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
 
 @media(max-width:400px){
-  .edit-row,.new-asset-row{grid-template-columns:1fr 50px 62px 82px 18px;gap:3px;padding:7px 7px;}
+  .edit-row,.new-asset-row{grid-template-columns:1fr 140px;gap:6px;padding:8px 9px;}
   .forecast-grid{grid-template-columns:repeat(2,1fr);}
 }
 </style>
@@ -579,12 +590,9 @@ canvas{width:100% !important;}
     </div>
 
     <!-- 컬럼 헤더 -->
-    <div style="display:grid;grid-template-columns:1fr 58px 70px 90px 22px;gap:5px;padding:0 10px;margin-bottom:4px;">
-      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;">자산명 / 티커</div>
-      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;">종류</div>
-      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;text-align:center;">수량↑ 매입가↓</div>
-      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;text-align:right;">금액(원) / 모드</div>
-      <div></div>
+    <div style="display:grid;grid-template-columns:1fr 160px;gap:8px;padding:0 11px;margin-bottom:4px;">
+      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;">자산명 · 티커 · 금액(원)</div>
+      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;">종류 · 수량 · 매입가</div>
     </div>
 
     <div id="editRows"></div>
@@ -1855,106 +1863,95 @@ function makeEditRow(name,type,rawAmount){
   const avgCost=meta.avgCost||0;
   const isAuto=meta.autoPrice!==false;
 
-  // ── 1. 이름 셀 (이름 + 티커 + 배지들) ──
+  // ══ 왼쪽: 이름 · 티커 · 금액(원) · 수익률+모드 ══
+  const leftCell=document.createElement('div');
+  leftCell.style.cssText='display:flex;flex-direction:column;gap:3px;min-width:0;';
+
+  // 이름 (탭 → 인라인 편집)
   const nameCell=document.createElement('div');
   nameCell.className='edit-row-name-cell';
-
-  // 이름 (탭 → 편집)
   const nameSpan=document.createElement('div');
-  nameSpan.className='edit-row-name';nameSpan.textContent=name;
-  nameSpan.title='탭해서 이름 수정';nameSpan.style.cursor='pointer';
+  nameSpan.className='edit-row-name';nameSpan.textContent=name;nameSpan.title='탭해서 이름 수정';
   nameSpan.addEventListener('click',()=>{
     const inp=document.createElement('input');
     inp.type='text';inp.className='edit-name-input';inp.value=nameSpan.textContent;inp.autocomplete='off';
     nameCell.replaceChild(inp,nameSpan);inp.focus();inp.select();
-    const finish=()=>{
-      nameSpan.textContent=inp.value.trim()||nameSpan.textContent;
-      nameCell.replaceChild(nameSpan,inp);div.dataset.name=nameSpan.textContent;
-    };
+    const finish=()=>{nameSpan.textContent=inp.value.trim()||nameSpan.textContent;nameCell.replaceChild(nameSpan,inp);div.dataset.name=nameSpan.textContent;};
     inp.addEventListener('blur',finish);
     inp.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key==='Tab')inp.blur();});
   });
+  nameCell.appendChild(nameSpan);
 
-  // 티커 입력
+  // 티커
   const tickerInp=document.createElement('input');
   tickerInp.type='text';tickerInp.className='ticker-input';
-  tickerInp.value=ticker;tickerInp.placeholder='티커 예)NVDA';tickerInp.autocomplete='off';
-  tickerInp.style.cssText=`background:transparent;border:none;border-bottom:1px dashed rgba(100,116,139,.35);
-    color:var(--text-muted);font-size:9px;font-family:'Space Mono',monospace;
-    outline:none;width:100%;padding:1px 0;margin-top:2px;font-size:16px;transform:scale(0.6);
-    transform-origin:left;width:160%;`;
-  // scale trick으로 9px처럼 보이면서 zoom 방지
-  tickerInp.style.cssText=`background:transparent;border:none;border-bottom:1px dashed rgba(100,116,139,.35);
-    color:var(--text-muted);font-size:9px;font-family:'Space Mono',monospace;
-    outline:none;width:100%;padding:1px 0;margin-top:1px;`;
-  tickerInp.addEventListener('focus',function(){this.style.borderBottomColor='var(--gold)';this.style.color='var(--text-dim)';});
-  tickerInp.addEventListener('blur',function(){this.style.borderBottomColor='rgba(100,116,139,.35)';this.style.color='var(--text-muted)';});
+  tickerInp.value=ticker;tickerInp.placeholder='티커  예) NVDA · BTC-USD';tickerInp.autocomplete='off';
+  tickerInp.style.cssText=`background:transparent;border:none;border-bottom:1px dashed rgba(100,116,139,.3);
+    color:var(--text-muted);font-size:10px;font-family:'Space Mono',monospace;
+    outline:none;width:100%;padding:1px 0;`;
+  tickerInp.addEventListener('focus',function(){this.style.borderBottomColor='var(--gold)';this.style.color='var(--text)';});
+  tickerInp.addEventListener('blur',function(){this.style.borderBottomColor='rgba(100,116,139,.3)';this.style.color='var(--text-muted)';});
 
-  nameCell.appendChild(nameSpan);
-  nameCell.appendChild(tickerInp);
-
-  // ── 2. 종류 ──
-  const typeCell=document.createElement('div');typeCell.className='type-btn-cell';
-  typeCell.appendChild(makeTypeBtn(type));
-
-  // ── 3. 수량 + 평균매입가 (세로 2줄) ──
-  const qtyWrap=document.createElement('div');
-  qtyWrap.style.cssText='display:flex;flex-direction:column;gap:2px;min-width:0;';
-
-  const qtyInp=document.createElement('input');
-  qtyInp.type='text';qtyInp.inputMode='decimal';qtyInp.className='qty-input';
-  qtyInp.value=qty>0?qty:'';qtyInp.placeholder='수량';qtyInp.autocomplete='off';
-
-  const avgInp=document.createElement('input');
-  avgInp.type='text';avgInp.inputMode='decimal';avgInp.className='avg-input';
-  avgInp.value=avgCost>0?avgCost:'';avgInp.placeholder='매입가';avgInp.autocomplete='off';
-  avgInp.title='평균 매입가 (달러/개)';
-
-  qtyWrap.appendChild(qtyInp);
-  qtyWrap.appendChild(avgInp);
-
-  // ── 4. 금액 + 자동토글 (세로 2줄) ──
-  const amtWrap=document.createElement('div');
-  amtWrap.style.cssText='display:flex;flex-direction:column;gap:2px;min-width:0;';
-
+  // 금액 (풀 너비)
   const amtInp=document.createElement('input');
-  amtInp.type='text';amtInp.inputMode='numeric';amtInp.className='edit-amount-input';
-  amtInp.autocomplete='off';
+  amtInp.type='text';amtInp.inputMode='numeric';amtInp.className='edit-amount-input';amtInp.autocomplete='off';
   bindAmountInput(amtInp,rawAmount);
 
-  // 자동/수동 토글
+  // 수익률 배지 + 자동/수동 토글 한 줄
+  const bottomRow=document.createElement('div');
+  bottomRow.style.cssText='display:flex;align-items:center;justify-content:space-between;';
+  const profitSpan=document.createElement('span');
+  profitSpan.className='profit-badge';
+  profitSpan.style.cssText='font-size:9px;font-family:"Space Mono",monospace;';
   const autoBtn=document.createElement('button');
-  autoBtn.className='auto-toggle';
-  autoBtn.dataset.on=isAuto?'1':'0';
-  autoBtn.style.cssText=`background:none;border:none;font-size:9px;font-family:'Space Mono',monospace;
-    cursor:pointer;text-align:right;padding:0;width:100%;`;
+  autoBtn.className='auto-toggle';autoBtn.dataset.on=isAuto?'1':'0';
+  autoBtn.style.cssText='background:none;border:none;font-size:9px;font-family:"Space Mono",monospace;cursor:pointer;padding:0;';
   const setAutoStyle=()=>{
     const on=autoBtn.dataset.on==='1';
     autoBtn.textContent=on?'⚡자동':'✏️수동';
     autoBtn.style.color=on?'var(--accent)':'var(--text-muted)';
-    amtInp.style.opacity=on?'0.6':'1';
+    amtInp.style.opacity=on?'0.65':'1';
     amtInp.readOnly=on;
   };
   setAutoStyle();
-  autoBtn.addEventListener('click',()=>{
-    autoBtn.dataset.on=autoBtn.dataset.on==='1'?'0':'1';
-    setAutoStyle();
-    setAssetMeta(name,{autoPrice:autoBtn.dataset.on==='1'});
-  });
+  autoBtn.addEventListener('click',()=>{autoBtn.dataset.on=autoBtn.dataset.on==='1'?'0':'1';setAutoStyle();setAssetMeta(name,{autoPrice:autoBtn.dataset.on==='1'});});
+  bottomRow.appendChild(profitSpan);bottomRow.appendChild(autoBtn);
 
-  amtWrap.appendChild(amtInp);
-  amtWrap.appendChild(autoBtn);
+  leftCell.appendChild(nameCell);
+  leftCell.appendChild(tickerInp);
+  leftCell.appendChild(amtInp);
+  leftCell.appendChild(bottomRow);
 
-  // ── 5. 삭제 ──
+  // ══ 오른쪽: 종류·삭제 / 수량 / 매입가 ══
+  const rightCell=document.createElement('div');
+  rightCell.style.cssText='display:flex;flex-direction:column;gap:4px;';
+
+  // 종류 + 삭제
+  const typeDelRow=document.createElement('div');
+  typeDelRow.style.cssText='display:flex;align-items:center;gap:4px;';
+  const typeCell=document.createElement('div');typeCell.className='type-btn-cell';typeCell.style.flex='1';
+  typeCell.appendChild(makeTypeBtn(type));
   const delBtn=document.createElement('button');
   delBtn.className='edit-del-btn';delBtn.textContent='✕';
   delBtn.addEventListener('click',()=>div.remove());
+  typeDelRow.appendChild(typeCell);typeDelRow.appendChild(delBtn);
 
-  div.appendChild(nameCell);
-  div.appendChild(typeCell);
-  div.appendChild(qtyWrap);
-  div.appendChild(amtWrap);
-  div.appendChild(delBtn);
+  // 수량
+  const qtyInp=document.createElement('input');
+  qtyInp.type='text';qtyInp.inputMode='decimal';qtyInp.className='qty-input';
+  qtyInp.value=qty>0?qty:'';qtyInp.placeholder='수량';qtyInp.autocomplete='off';
+
+  // 평균 매입가
+  const avgInp=document.createElement('input');
+  avgInp.type='text';avgInp.inputMode='decimal';avgInp.className='avg-input';
+  avgInp.value=avgCost>0?avgCost:'';avgInp.placeholder='매입가($)';avgInp.autocomplete='off';
+
+  rightCell.appendChild(typeDelRow);
+  rightCell.appendChild(qtyInp);
+  rightCell.appendChild(avgInp);
+
+  div.appendChild(leftCell);
+  div.appendChild(rightCell);
   return div;
 }
 
@@ -1962,39 +1959,41 @@ function addNewAssetRow(){
   const el=document.getElementById('editRows');
   const div=document.createElement('div');div.className='edit-row new-asset-row';
 
+  // 왼쪽
+  const leftCell=document.createElement('div');
+  leftCell.style.cssText='display:flex;flex-direction:column;gap:3px;min-width:0;';
   const nameInp=document.createElement('input');
   nameInp.type='text';nameInp.className='new-name-input';nameInp.placeholder='자산명';nameInp.autocomplete='off';
-
-  const typeCell=document.createElement('div');typeCell.className='type-btn-cell';
-  typeCell.appendChild(makeTypeBtn(ALL_TYPES[0]));
-
-  const qtyWrap=document.createElement('div');
-  qtyWrap.style.cssText='display:flex;flex-direction:column;gap:2px;';
-  const qtyInp=document.createElement('input');
-  qtyInp.type='text';qtyInp.inputMode='decimal';qtyInp.className='qty-input';
-  qtyInp.placeholder='수량';qtyInp.autocomplete='off';
-  const avgInp=document.createElement('input');
-  avgInp.type='text';avgInp.inputMode='decimal';avgInp.className='avg-input';
-  avgInp.placeholder='매입가($)';avgInp.autocomplete='off';
-  qtyWrap.appendChild(qtyInp);qtyWrap.appendChild(avgInp);
-
-  const amtWrap=document.createElement('div');
-  amtWrap.style.cssText='display:flex;flex-direction:column;gap:2px;';
+  const tickerInp=document.createElement('input');
+  tickerInp.type='text';tickerInp.className='ticker-input';tickerInp.placeholder='티커  예) NVDA';tickerInp.autocomplete='off';
+  tickerInp.style.cssText=`background:transparent;border:none;border-bottom:1px dashed rgba(100,116,139,.3);
+    color:var(--text-muted);font-size:10px;font-family:'Space Mono',monospace;outline:none;width:100%;padding:1px 0;`;
   const amtInp=document.createElement('input');
-  amtInp.type='text';amtInp.inputMode='numeric';amtInp.className='edit-amount-input';
-  amtInp.placeholder='금액';amtInp.autocomplete='off';
+  amtInp.type='text';amtInp.inputMode='numeric';amtInp.className='edit-amount-input';amtInp.placeholder='금액';amtInp.autocomplete='off';
   bindAmountInput(amtInp,0);
-  const autoBtn=document.createElement('div');
-  autoBtn.style.cssText='font-size:9px;color:var(--accent);font-family:"Space Mono",monospace;text-align:right;';
-  autoBtn.textContent='⚡자동';
-  amtWrap.appendChild(amtInp);amtWrap.appendChild(autoBtn);
+  const autoLabel=document.createElement('div');
+  autoLabel.style.cssText='font-size:9px;color:var(--accent);font-family:"Space Mono",monospace;text-align:right;';
+  autoLabel.textContent='⚡자동';
+  leftCell.appendChild(nameInp);leftCell.appendChild(tickerInp);leftCell.appendChild(amtInp);leftCell.appendChild(autoLabel);
 
+  // 오른쪽
+  const rightCell=document.createElement('div');
+  rightCell.style.cssText='display:flex;flex-direction:column;gap:4px;';
+  const typeDelRow=document.createElement('div');
+  typeDelRow.style.cssText='display:flex;align-items:center;gap:4px;';
+  const typeCell=document.createElement('div');typeCell.className='type-btn-cell';typeCell.style.flex='1';
+  typeCell.appendChild(makeTypeBtn(ALL_TYPES[0]));
   const delBtn=document.createElement('button');
   delBtn.className='edit-del-btn';delBtn.textContent='✕';
   delBtn.addEventListener('click',()=>div.remove());
+  typeDelRow.appendChild(typeCell);typeDelRow.appendChild(delBtn);
+  const qtyInp=document.createElement('input');
+  qtyInp.type='text';qtyInp.inputMode='decimal';qtyInp.className='qty-input';qtyInp.placeholder='수량';qtyInp.autocomplete='off';
+  const avgInp=document.createElement('input');
+  avgInp.type='text';avgInp.inputMode='decimal';avgInp.className='avg-input';avgInp.placeholder='매입가($)';avgInp.autocomplete='off';
+  rightCell.appendChild(typeDelRow);rightCell.appendChild(qtyInp);rightCell.appendChild(avgInp);
 
-  div.appendChild(nameInp);div.appendChild(typeCell);div.appendChild(qtyWrap);
-  div.appendChild(amtWrap);div.appendChild(delBtn);
+  div.appendChild(leftCell);div.appendChild(rightCell);
   el.appendChild(div);nameInp.focus();
 }
 
