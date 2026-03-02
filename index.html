@@ -221,8 +221,8 @@ canvas{width:100% !important;}
   transition:all .2s;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;}
 .btn-outline:hover{border-color:var(--accent);color:var(--accent);}
 
-.edit-row{display:grid;grid-template-columns:1fr 60px 72px 68px 24px;
-  align-items:start;gap:6px;padding:8px 11px;background:var(--surface2);
+.edit-row{display:grid;grid-template-columns:1fr 58px 70px 90px 22px;
+  align-items:start;gap:5px;padding:8px 10px;background:var(--surface2);
   border-radius:9px;margin-bottom:5px;border:1px solid transparent;}
 .edit-row-name{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   cursor:pointer;color:var(--text);}
@@ -243,8 +243,8 @@ canvas{width:100% !important;}
   color:var(--text);font-size:16px;font-weight:500;outline:none;width:100%;
   padding:1px 0;font-family:'Noto Sans KR',sans-serif;min-width:0;}
 .edit-name-input:focus{border-bottom-color:var(--accent);}
-.new-asset-row{display:grid;grid-template-columns:1fr 60px 72px 68px 24px;
-  gap:6px;align-items:start;padding:9px 11px;
+.new-asset-row{display:grid;grid-template-columns:1fr 58px 70px 90px 22px;
+  gap:5px;align-items:start;padding:9px 10px;
   background:rgba(0,212,255,.04);border:1px dashed rgba(0,212,255,.2);
   border-radius:9px;margin-bottom:5px;}
 .new-name-input{background:var(--surface2);border:1px solid var(--border);border-radius:7px;
@@ -288,7 +288,33 @@ canvas{width:100% !important;}
 .notif-status.ok{background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.2);}
 .notif-status.warn{background:rgba(245,158,11,.1);color:var(--gold);border:1px solid rgba(245,158,11,.2);}
 
-/* TYPE MODAL */
+/* ── MARKET PAGE ── */
+.market-section{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:14px;margin-bottom:13px;}
+.fx-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px;}
+.fx-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+  padding:10px 8px;text-align:center;}
+.fx-flag{font-size:18px;margin-bottom:3px;}
+.fx-label{font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;margin-bottom:4px;}
+.fx-value{font-size:15px;font-weight:700;font-family:'Space Mono',monospace;color:var(--accent);}
+.fx-change{font-size:9px;color:var(--text-muted);margin-top:3px;font-family:'Space Mono',monospace;}
+.market-update-time{font-size:9px;color:var(--text-muted);text-align:right;
+  font-family:'Space Mono',monospace;margin-top:4px;}
+.market-list{display:flex;flex-direction:column;gap:6px;}
+.market-item{display:grid;grid-template-columns:28px 1fr auto;align-items:center;
+  gap:8px;padding:9px 10px;background:var(--surface2);border-radius:9px;
+  border:1px solid transparent;transition:border-color .2s;}
+.market-item:hover{border-color:var(--border);}
+.market-item-icon{font-size:18px;text-align:center;}
+.market-item-name{font-size:12px;font-weight:600;}
+.market-item-sub{font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;margin-top:1px;}
+.market-item-right{text-align:right;}
+.market-item-price{font-size:13px;font-weight:700;font-family:'Space Mono',monospace;}
+.market-item-change{font-size:10px;font-family:'Space Mono',monospace;margin-top:2px;}
+.market-item-change.up{color:var(--green);}
+.market-item-change.down{color:var(--red);}
+.market-loading{text-align:center;padding:16px;font-size:11px;color:var(--text-muted);
+  animation:pulse 1.5s infinite;}
 .type-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;
   display:flex;align-items:flex-end;justify-content:center;
   opacity:0;pointer-events:none;transition:opacity .25s;}
@@ -384,7 +410,7 @@ canvas{width:100% !important;}
   font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
 
 @media(max-width:400px){
-  .edit-row,.new-asset-row{grid-template-columns:1fr 52px 62px 58px 20px;gap:4px;padding:7px 8px;}
+  .edit-row,.new-asset-row{grid-template-columns:1fr 50px 62px 82px 18px;gap:3px;padding:7px 7px;}
   .forecast-grid{grid-template-columns:repeat(2,1fr);}
 }
 </style>
@@ -530,21 +556,6 @@ canvas{width:100% !important;}
 <div class="page" id="page-input">
 <div class="container" style="padding-top:14px">
 
-  <div class="rate-banner" id="rateBanner">
-    <div class="rate-item">
-      <div class="rate-label">USD/KRW</div>
-      <div class="rate-value" id="rateUSD"><span class="rate-loading">로딩중...</span></div>
-    </div>
-    <div class="rate-item">
-      <div class="rate-label">JPY 100/KRW</div>
-      <div class="rate-value" id="rateJPY"><span class="rate-loading">...</span></div>
-    </div>
-    <div>
-      <div class="rate-label">업데이트</div>
-      <div class="rate-time" id="rateTime">—</div>
-    </div>
-  </div>
-
   <div class="input-section">
     <div class="section-title">새 달 자산 기록</div>
 
@@ -568,14 +579,11 @@ canvas{width:100% !important;}
     </div>
 
     <!-- 컬럼 헤더 -->
-    <div style="display:grid;grid-template-columns:1fr 60px 72px 68px 24px;gap:6px;padding:0 11px;margin-bottom:4px;">
+    <div style="display:grid;grid-template-columns:1fr 58px 70px 90px 22px;gap:5px;padding:0 10px;margin-bottom:4px;">
       <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;">자산명 / 티커</div>
       <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;">종류</div>
-      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;text-align:center;">수량 / 매입가</div>
-      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;text-align:right;">금액 / 모드</div>
-      <div></div>
-    </div>
-      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;text-align:right;">금액(원)</div>
+      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;text-align:center;">수량↑ 매입가↓</div>
+      <div style="font-size:9px;color:var(--text-muted);font-family:'Space Mono',monospace;text-align:right;">금액(원) / 모드</div>
       <div></div>
     </div>
 
@@ -589,6 +597,70 @@ canvas{width:100% !important;}
 </div>
 
 <!-- PAGE 4: 설정 -->
+<!-- PAGE: 자산 시세 -->
+<div class="page" id="page-market">
+<div class="container" style="padding-top:14px">
+
+  <!-- 환율 카드 -->
+  <div class="market-section">
+    <div class="section-title">환율</div>
+    <div class="fx-grid">
+      <div class="fx-card" id="fxUSD">
+        <div class="fx-flag">🇺🇸</div>
+        <div class="fx-label">USD / KRW</div>
+        <div class="fx-value" id="mktUSD">—</div>
+        <div class="fx-change" id="mktUSDSub">조회 중...</div>
+      </div>
+      <div class="fx-card" id="fxJPY">
+        <div class="fx-flag">🇯🇵</div>
+        <div class="fx-label">JPY 100 / KRW</div>
+        <div class="fx-value" id="mktJPY">—</div>
+        <div class="fx-change" id="mktJPYSub">조회 중...</div>
+      </div>
+      <div class="fx-card" id="fxEUR">
+        <div class="fx-flag">🇪🇺</div>
+        <div class="fx-label">EUR / KRW</div>
+        <div class="fx-value" id="mktEUR">—</div>
+        <div class="fx-change" id="mktEURSub">조회 중...</div>
+      </div>
+    </div>
+    <div class="market-update-time" id="marketUpdateTime">업데이트: —</div>
+  </div>
+
+  <!-- 금 시세 -->
+  <div class="market-section">
+    <div class="section-title">귀금속</div>
+    <div class="market-list" id="marketGold"></div>
+  </div>
+
+  <!-- 코인 시세 -->
+  <div class="market-section">
+    <div class="section-title">코인</div>
+    <div class="market-list" id="marketCoin"></div>
+  </div>
+
+  <!-- 내 보유 주식 -->
+  <div class="market-section">
+    <div class="section-title">내 보유 주식</div>
+    <div class="market-list" id="marketMyStocks"></div>
+  </div>
+
+  <!-- 주요 주식 -->
+  <div class="market-section">
+    <div class="section-title">주요 지수 & 대표주</div>
+    <div class="market-list" id="marketMajor"></div>
+  </div>
+
+  <div style="text-align:center;padding:10px 0;">
+    <button onclick="refreshMarket()" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);border-radius:10px;color:var(--accent);font-size:12px;padding:9px 20px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">
+      🔄 새로고침
+    </button>
+  </div>
+
+</div>
+</div>
+
+<!-- PAGE: 설정 -->
 <div class="page" id="page-settings">
 <div class="container" style="padding-top:14px">
 
@@ -648,6 +720,9 @@ canvas{width:100% !important;}
   </button>
   <button class="tab-item" data-tab="portfolio" onclick="switchTab('portfolio',this)">
     <span class="tab-icon">🥧</span><span class="tab-label">포트폴리오</span>
+  </button>
+  <button class="tab-item" data-tab="market" onclick="switchTab('market',this)">
+    <span class="tab-icon">📈</span><span class="tab-label">시세</span>
   </button>
   <button class="tab-item" data-tab="input" onclick="switchTab('input',this)">
     <span class="tab-icon">✏️</span><span class="tab-label">입력</span>
@@ -990,9 +1065,24 @@ function saveGoal(){
   showToast('🎯 목표가 설정되었습니다!');
 }
 function openGoalModal(){
-  document.getElementById('goalAmountInput').value=goalData.amount?goalData.amount.toLocaleString('ko-KR'):'';
+  const inp=document.getElementById('goalAmountInput');
+  inp.value=goalData.amount?goalData.amount.toLocaleString('ko-KR'):'';
   document.getElementById('goalYearInput').value=goalData.year||'';
   document.getElementById('goalModalOverlay').classList.add('show');
+  // 콤마 실시간 포맷
+  if(!inp._bound){
+    inp._bound=true;
+    inp.addEventListener('input',function(){
+      const nums=this.value.replace(/[^0-9]/g,'');
+      const c=this.selectionStart,pL=this.value.length;
+      if(nums){const f=parseInt(nums).toLocaleString('ko-KR');this.value=f;
+        const diff=f.length-pL;try{this.setSelectionRange(c+diff,c+diff);}catch(e){}}
+      else this.value='';
+    });
+    inp.addEventListener('focus',function(){
+      // 이미 포맷된 값 유지, 빈칸 아님
+    });
+  }
 }
 function closeGoalModal(){document.getElementById('goalModalOverlay').classList.remove('show');}
 document.getElementById('goalModalOverlay').addEventListener('click',function(e){if(e.target===this)closeGoalModal();});
@@ -1155,6 +1245,7 @@ function switchTab(tab,el){
   if(tab==='portfolio'){renderDonutChart();renderMonthSelector();analyzePortfolio();}
   if(tab==='dashboard'){renderLineChart();renderForecast();}
   if(tab==='settings'){loadSettingsUI();}
+  if(tab==='market'){loadMarketPage();}
   if(tab==='input'){
     // 이미 rows 로드된 상태면 시세만 갱신
     const rows=document.querySelectorAll('.edit-row[data-name]');
@@ -1176,15 +1267,230 @@ async function fetchExchangeRate(){
     const r=await fetch('https://api.exchangerate-api.com/v4/latest/USD');
     const d=await r.json();
     const usd=d.rates.KRW, jpy=d.rates.KRW/d.rates.JPY;
-    // 시세 계산용 캐시 업데이트
-    cachedRates.USD = usd;
-    cachedRates.JPY = jpy; // 원/1엔
-    document.getElementById('rateUSD').textContent=Math.round(usd).toLocaleString('ko-KR')+'원';
-    document.getElementById('rateJPY').textContent=(jpy*100).toFixed(0)+'원';
-    document.getElementById('rateTime').textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    cachedRates.USD=usd; cachedRates.JPY=jpy;
   }catch(e){
-    document.getElementById('rateUSD').textContent='—';
     setTimeout(fetchExchangeRate,15000);
+  }
+}
+
+
+
+// ══ MARKET PAGE ══
+const MARKET_STOCKS_MAJOR = [
+  {ticker:'SPY', name:'S&P 500 ETF', icon:'🇺🇸', sub:'미국 대형주'},
+  {ticker:'QQQ', name:'나스닥100 ETF', icon:'💻', sub:'기술주'},
+  {ticker:'NVDA', name:'엔비디아', icon:'🟢', sub:'반도체·AI'},
+  {ticker:'AAPL', name:'애플', icon:'🍎', sub:'빅테크'},
+  {ticker:'TSLA', name:'테슬라', icon:'⚡', sub:'전기차'},
+  {ticker:'MSFT', name:'마이크로소프트', icon:'🪟', sub:'빅테크'},
+  {ticker:'AMZN', name:'아마존', icon:'📦', sub:'이커머스'},
+  {ticker:'TSM',  name:'TSMC', icon:'🔬', sub:'반도체'},
+];
+const MARKET_METALS = [
+  {ticker:'GC=F', name:'금 (Gold)', icon:'🥇', sub:'Troy oz / USD'},
+  {ticker:'SI=F', name:'은 (Silver)', icon:'🥈', sub:'Troy oz / USD'},
+  {ticker:'GLD',  name:'금 ETF (GLD)', icon:'📊', sub:'NAV / USD'},
+];
+const MARKET_COINS = [
+  {id:'bitcoin',  name:'비트코인', icon:'₿',  sub:'BTC'},
+  {id:'ethereum', name:'이더리움', icon:'Ξ',  sub:'ETH'},
+  {id:'ripple',   name:'리플',    icon:'✕',  sub:'XRP'},
+  {id:'solana',   name:'솔라나',  icon:'◎',  sub:'SOL'},
+];
+
+let marketAbortCtrl = null;
+let marketLoaded = false;
+
+async function loadMarketPage(){
+  if(marketAbortCtrl) marketAbortCtrl.abort();
+  marketAbortCtrl = new AbortController();
+  marketLoaded = true;
+
+  // 환율 섹션
+  showMarketLoading('marketGold');
+  showMarketLoading('marketCoin');
+  showMarketLoading('marketMyStocks');
+  showMarketLoading('marketMajor');
+
+  // 환율 (이미 캐시에 있음, 추가로 KRW/EUR)
+  await fetchMarketFX();
+
+  // 병렬 조회
+  Promise.all([
+    fetchMarketMetals(),
+    fetchMarketCoins(),
+    fetchMarketMyStocks(),
+    fetchMarketMajorStocks(),
+  ]);
+}
+
+function refreshMarket(){ loadMarketPage(); }
+
+function showMarketLoading(id){
+  const el=document.getElementById(id);
+  if(el) el.innerHTML='<div class="market-loading">시세 조회 중...</div>';
+}
+
+async function fetchMarketFX(){
+  try{
+    const r=await fetch('https://api.exchangerate-api.com/v4/latest/USD',
+      {signal:marketAbortCtrl?.signal});
+    const d=await r.json();
+    const krw=d.rates.KRW;
+    const jpy=d.rates.KRW/d.rates.JPY;
+    const eur=d.rates.KRW/d.rates.EUR;
+    // 업데이트 (입력탭에서도 쓰는 cachedRates도 갱신)
+    cachedRates.USD=krw; cachedRates.JPY=jpy;
+    document.getElementById('mktUSD').textContent=Math.round(krw).toLocaleString('ko-KR')+'원';
+    document.getElementById('mktJPY').textContent=Math.round(jpy*100).toLocaleString('ko-KR')+'원';
+    document.getElementById('mktEUR').textContent=Math.round(eur).toLocaleString('ko-KR')+'원';
+    document.getElementById('mktUSDSub').textContent='$1 = '+Math.round(krw).toLocaleString()+'₩';
+    document.getElementById('mktJPYSub').textContent='¥100 = '+Math.round(jpy*100).toLocaleString()+'₩';
+    document.getElementById('mktEURSub').textContent='€1 = '+Math.round(eur).toLocaleString()+'₩';
+    document.getElementById('marketUpdateTime').textContent=
+      '업데이트: '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }catch(e){}
+}
+
+async function fetchYahooPrice(ticker){
+  try{
+    const url=`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=5d`;
+    const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const r=await fetch(proxy,{signal:marketAbortCtrl?.signal});
+    const d=await r.json();
+    const parsed=JSON.parse(d.contents);
+    const meta=parsed?.chart?.result?.[0]?.meta;
+    if(!meta) return null;
+    const price=meta.regularMarketPrice;
+    const prev=meta.chartPreviousClose||meta.previousClose||price;
+    const change=price-prev;
+    const changePct=prev>0?(change/prev*100):0;
+    const currency=meta.currency||'USD';
+    return {price,change,changePct,currency};
+  }catch(e){return null;}
+}
+
+async function fetchCoinData(coinId){
+  try{
+    const r=await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=krw,usd&include_24hr_change=true`,
+      {signal:marketAbortCtrl?.signal});
+    const d=await r.json();
+    const data=d[coinId];
+    if(!data) return null;
+    return {priceKRW:data.krw, priceUSD:data.usd, change24h:data.krw_24h_change||0};
+  }catch(e){return null;}
+}
+
+function renderMarketItem(container,{icon,name,sub,priceStr,subPrice,change,changePct,owned}){
+  const isUp=(changePct||0)>=0;
+  const changeStr=changePct!=null
+    ?`${isUp?'▲':'▼'} ${Math.abs(changePct).toFixed(2)}%  ${isUp?'+':''}${(change||0).toFixed(2)}`
+    :'—';
+  const ownedBadge=owned
+    ?`<span style="background:rgba(0,212,255,.12);color:var(--accent);font-size:8px;
+        padding:1px 5px;border-radius:4px;font-family:'Space Mono',monospace;margin-left:5px;">보유중</span>`:'';
+  const div=document.createElement('div');
+  div.className='market-item';
+  div.innerHTML=`
+    <div class="market-item-icon">${icon}</div>
+    <div>
+      <div class="market-item-name">${name}${ownedBadge}</div>
+      <div class="market-item-sub">${sub}</div>
+    </div>
+    <div class="market-item-right">
+      <div class="market-item-price">${priceStr}</div>
+      ${subPrice?`<div class="market-item-sub" style="text-align:right">${subPrice}</div>`:''}
+      <div class="market-item-change ${isUp?'up':'down'}">${changeStr}</div>
+    </div>`;
+  container.appendChild(div);
+}
+
+async function fetchMarketMetals(){
+  const el=document.getElementById('marketGold');el.innerHTML='';
+  for(const m of MARKET_METALS){
+    const data=await fetchYahooPrice(m.ticker);
+    if(!data){el.innerHTML+='';continue;}
+    const krw=Math.round(data.price*cachedRates.USD);
+    renderMarketItem(el,{
+      icon:m.icon, name:m.name, sub:m.sub,
+      priceStr:`$${data.price.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+      subPrice:`≈ ${krw.toLocaleString('ko-KR')}원`,
+      change:data.change, changePct:data.changePct
+    });
+  }
+}
+
+async function fetchMarketCoins(){
+  const el=document.getElementById('marketCoin');el.innerHTML='';
+  // 내가 보유한 코인 티커 목록
+  const latestAssets=allData[allData.length-1]?.assets||[];
+  const myCoins=new Set(latestAssets.filter(a=>a.type==='코인').map(a=>{
+    const m=getAssetMeta(a.name);
+    return COIN_IDS[m.ticker]||COIN_IDS[a.name]||'';
+  }).filter(Boolean));
+
+  for(const c of MARKET_COINS){
+    const data=await fetchCoinData(c.id);
+    if(!data){continue;}
+    const owned=myCoins.has(c.id);
+    renderMarketItem(el,{
+      icon:c.icon, name:c.name, sub:c.sub,
+      priceStr:`${Math.round(data.priceKRW).toLocaleString('ko-KR')}원`,
+      subPrice:`$${data.priceUSD.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+      change:data.change24h, changePct:data.change24h, owned,
+    });
+  }
+}
+
+async function fetchMarketMyStocks(){
+  const el=document.getElementById('marketMyStocks');el.innerHTML='';
+  const latestAssets=allData[allData.length-1]?.assets||[];
+  const myTickers=[...new Set(
+    latestAssets.filter(a=>a.type==='주식').map(a=>{
+      const meta=getAssetMeta(a.name);
+      return {name:a.name, ticker:meta.ticker||TICKER_MAP[a.name]||''};
+    }).filter(t=>t.ticker)
+  )];
+  // 대표주와 겹치는 건 건너뜀
+  const majorTickers=new Set(MARKET_STOCKS_MAJOR.map(s=>s.ticker));
+  const unique=myTickers.filter(t=>!majorTickers.has(t.ticker));
+
+  for(const {name,ticker} of unique){
+    const data=await fetchYahooPrice(ticker);
+    if(!data) continue;
+    const isJPY=ticker.endsWith('.T');
+    const rate=isJPY?cachedRates.JPY:cachedRates.USD;
+    const krw=Math.round(data.price*rate*(isJPY?1:1));
+    const sym=isJPY?'¥':'$';
+    renderMarketItem(el,{
+      icon:'📌', name, sub:ticker,
+      priceStr:`${sym}${data.price.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+      subPrice:`≈ ${krw.toLocaleString('ko-KR')}원`,
+      change:data.change, changePct:data.changePct, owned:true,
+    });
+  }
+  if(!unique.length) el.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:8px 10px;">입력 탭에서 티커를 등록하면 여기 표시돼요</div>';
+}
+
+async function fetchMarketMajorStocks(){
+  const el=document.getElementById('marketMajor');el.innerHTML='';
+  const latestAssets=allData[allData.length-1]?.assets||[];
+  const myTickerSet=new Set(latestAssets.map(a=>{
+    const m=getAssetMeta(a.name);return m.ticker||TICKER_MAP[a.name]||'';
+  }));
+
+  for(const s of MARKET_STOCKS_MAJOR){
+    const data=await fetchYahooPrice(s.ticker);
+    if(!data) continue;
+    const krw=Math.round(data.price*cachedRates.USD);
+    const owned=myTickerSet.has(s.ticker);
+    renderMarketItem(el,{
+      icon:s.icon, name:s.name, sub:s.sub,
+      priceStr:`$${data.price.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+      subPrice:`≈ ${krw.toLocaleString('ko-KR')}원`,
+      change:data.change, changePct:data.changePct, owned,
+    });
   }
 }
 
