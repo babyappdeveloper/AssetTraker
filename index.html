@@ -1390,6 +1390,33 @@ const FIXED_QUERIES = [
   {key:'gold',   label:'금·귀금속', query:'금 시세 귀금속',         icon:'🥇', color:'#eab308'},
 ];
 
+function buildAllQueries(assets){
+  return [
+    ...FIXED_QUERIES.map(q=>({...q,isFixed:true})),
+    ...assets.filter(a=>a.type==='주식'||a.type==='코인').map(a=>({
+      key:a.name,label:a.name,query:getNewsQuery(a),
+      color:getAssetTagColor(a.name),isFixed:false
+    }))
+  ];
+}
+async function _doIssueFetch(queries, cacheKey){
+  if(issueAbortCtrl) issueAbortCtrl.abort();
+  issueAbortCtrl=new AbortController();
+  try{
+    const fetched=await Promise.all(queries.map(q=>fetchRSS(q.query,issueAbortCtrl.signal).then(items=>items.map(item=>({...item,assetKey:q.key,assetLabel:q.label,assetColor:q.color,sentiment:detectSentiment(item.title+' '+item.desc),importance:detectImportance(item.title)})))));
+    const allItems=fetched.flat();
+    const seen=new Set();
+    const deduped=allItems.sort((a,b)=>b.date-a.date).filter(i=>{if(seen.has(i.title))return false;seen.add(i.title);return true;});
+    issueCache[cacheKey]={items:deduped,ts:Date.now()};
+    if(document.getElementById('page-issues')?.classList.contains('active')){
+      renderIssues(deduped);
+      const t=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+      const el=document.getElementById('issueSubtitle');
+      if(el) el.textContent=`${t} 업데이트 · ${deduped.length}건`;
+    }
+  }catch(e){if(e.name!=='AbortError')console.warn('issue fetch',e.message);}
+}
+
 // Google News RSS → allorigins 프록시 파싱
 async function fetchRSS(query, signal){
   const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ko&gl=KR&ceid=KR:ko`;
@@ -1441,11 +1468,17 @@ async function loadIssues(forceRefresh=false){
 
   const cacheKey = myAssets.map(a=>a.name).join(',');
   const cached = issueCache[cacheKey];
-  if(!forceRefresh && cached && (Date.now()-cached.ts) < 15*60*1000){
+  if(cached){
     renderIssues(cached.items);
-    document.getElementById('issueSubtitle').textContent =
-      `${new Date(cached.ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} 업데이트 · ${cached.items.length}건`;
-    return;
+    const tStr=new Date(cached.ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('issueSubtitle').textContent=`${tStr} 업데이트 · ${cached.items.length}건`;
+    if(!forceRefresh && (Date.now()-cached.ts)<15*60*1000) return;
+    // 만료됐으면 백그라운드 갱신 (화면은 이미 보임)
+    if(!forceRefresh){
+      document.getElementById('issueSubtitle').textContent+=` ↻ 갱신 중`;
+      _doIssueFetch(buildAllQueries(myAssets),cacheKey);
+      return;
+    }
   }
 
   issuesLoading = true;
@@ -1458,13 +1491,7 @@ async function loadIssues(forceRefresh=false){
   // 로딩 스켈레톤
   const content = document.getElementById('issueContent');
   content.innerHTML = '';
-  const allQueries = [
-    ...FIXED_QUERIES.map(q=>({...q, isFixed:true})),
-    ...myAssets.filter(a=>a.type==='주식'||a.type==='코인').map(a=>({
-      key:a.name, label:a.name, query:getNewsQuery(a), icon:a.type==='코인'?'₿':'📌',
-      color:getAssetTagColor(a.name), isFixed:false, assetName:a.name
-    }))
-  ];
+  const allQueries = buildAllQueries(myAssets);
   allQueries.forEach(q=>{
     const lc=document.createElement('div');lc.className='issue-loading-card';
     lc.innerHTML=`<div class="issue-loading-spinner"></div>
@@ -1473,24 +1500,8 @@ async function loadIssues(forceRefresh=false){
   });
 
   try{
-    const allItems = [];
-    for(const q of allQueries){
-      if(issueAbortCtrl.signal.aborted) break;
-      const items = await fetchRSS(q.query, issueAbortCtrl.signal);
-      items.forEach(item=>{
-        const sentiment  = detectSentiment(item.title+' '+item.desc);
-        const importance = detectImportance(item.title);
-        allItems.push({
-          ...item,
-          assetKey:   q.key,
-          assetLabel: q.label,
-          assetColor: q.color,
-          isFixed:    q.isFixed||false,
-          assetName:  q.assetName||null,
-          sentiment, importance,
-        });
-      });
-    }
+    const fetched=await Promise.all(allQueries.map(q=>fetchRSS(q.query,issueAbortCtrl.signal).then(items=>items.map(item=>({...item,assetKey:q.key,assetLabel:q.label,assetColor:q.color,sentiment:detectSentiment(item.title+' '+item.desc),importance:detectImportance(item.title)})))));    
+    const allItems=fetched.flat();
 
     // 날짜 내림차순 정렬, 중복 제목 제거
     const seen = new Set();
@@ -1663,30 +1674,59 @@ const MARKET_COINS = [
 let marketAbortCtrl = null;
 let marketLoaded = false;
 
-async function loadMarketPage(){
-  if(marketAbortCtrl) marketAbortCtrl.abort();
-  marketAbortCtrl = new AbortController();
+// 시세 캐시
+let marketCache = null;
+const MARKET_TTL = 5 * 60 * 1000;
+
+async function loadMarketPage(forceRefresh=false){
   marketLoaded = true;
-
-  // 환율 섹션
-  showMarketLoading('marketGold');
-  showMarketLoading('marketCoin');
-  showMarketLoading('marketMyStocks');
-  showMarketLoading('marketMajor');
-
-  // 환율 (이미 캐시에 있음, 추가로 KRW/EUR)
-  await fetchMarketFX();
-
-  // 병렬 조회
-  Promise.all([
-    fetchMarketMetals(),
-    fetchMarketCoins(),
-    fetchMarketMyStocks(),
-    fetchMarketMajorStocks(),
-  ]);
+  if(marketCache && !forceRefresh){
+    renderMarketFromCache(marketCache.data);
+    const age = Date.now() - marketCache.ts;
+    setMarketTimestamp(marketCache.ts, age > MARKET_TTL);
+    if(age > MARKET_TTL) _doMarketFetch();
+    return;
+  }
+  showMarketLoading('marketGold'); showMarketLoading('marketCoin');
+  showMarketLoading('marketMyStocks'); showMarketLoading('marketMajor');
+  await _doMarketFetch();
 }
 
-function refreshMarket(){ loadMarketPage(); }
+async function _doMarketFetch(){
+  if(marketAbortCtrl) marketAbortCtrl.abort();
+  marketAbortCtrl = new AbortController();
+  await Promise.all([
+    fetchMarketFX(), fetchMarketMetals(), fetchMarketCoins(),
+    fetchMarketMyStocks(), fetchMarketMajorStocks(),
+  ]);
+  marketCache = { data: _snapshotMarketDOM(), ts: Date.now() };
+  setMarketTimestamp(Date.now(), false);
+}
+function _snapshotMarketDOM(){
+  const g = id => document.getElementById(id);
+  return {
+    gold:g('marketGold')?.innerHTML, coin:g('marketCoin')?.innerHTML,
+    myStocks:g('marketMyStocks')?.innerHTML, major:g('marketMajor')?.innerHTML,
+    usd:g('mktUSD')?.textContent, jpy:g('mktJPY')?.textContent, eur:g('mktEUR')?.textContent,
+    usdSub:g('mktUSDSub')?.textContent, jpySub:g('mktJPYSub')?.textContent, eurSub:g('mktEURSub')?.textContent,
+  };
+}
+function renderMarketFromCache(d){
+  if(!d) return;
+  const s=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.innerHTML=v;};
+  const t=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.textContent=v;};
+  s('marketGold',d.gold); s('marketCoin',d.coin);
+  s('marketMyStocks',d.myStocks); s('marketMajor',d.major);
+  t('mktUSD',d.usd); t('mktJPY',d.jpy); t('mktEUR',d.eur);
+  t('mktUSDSub',d.usdSub); t('mktJPYSub',d.jpySub); t('mktEURSub',d.eurSub);
+}
+function setMarketTimestamp(ts, isStale){
+  const el = document.getElementById('marketUpdateTime'); if(!el) return;
+  const time = new Date(ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  el.style.color = isStale ? 'var(--gold)' : 'var(--text-muted)';
+  el.textContent = isStale ? `${time} ↻ 갱신 중` : `업데이트: ${time}`;
+}
+function refreshMarket(){ loadMarketPage(true); }
 
 function showMarketLoading(id){
   const el=document.getElementById(id);
@@ -1769,91 +1809,76 @@ function renderMarketItem(container,{icon,name,sub,priceStr,subPrice,change,chan
 }
 
 async function fetchMarketMetals(){
-  const el=document.getElementById('marketGold');el.innerHTML='';
-  for(const m of MARKET_METALS){
-    const data=await fetchYahooPrice(m.ticker);
-    if(!data){el.innerHTML+='';continue;}
+  const el=document.getElementById('marketGold'); if(!el) return; el.innerHTML='';
+  const results=await Promise.all(MARKET_METALS.map(m=>fetchYahooPrice(m.ticker)));
+  MARKET_METALS.forEach((m,i)=>{
+    const data=results[i]; if(!data) return;
     const krw=Math.round(data.price*cachedRates.USD);
-    renderMarketItem(el,{
-      icon:m.icon, name:m.name, sub:m.sub,
+    renderMarketItem(el,{icon:m.icon,name:m.name,sub:m.sub,
       priceStr:`$${data.price.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
-      subPrice:`≈ ${krw.toLocaleString('ko-KR')}원`,
-      change:data.change, changePct:data.changePct
-    });
-  }
+      subPrice:`≈ ${krw.toLocaleString('ko-KR')}원`,change:data.change,changePct:data.changePct});
+  });
 }
 
+// 코인: CoinGecko 단일 배치 (요청 1번)
 async function fetchMarketCoins(){
-  const el=document.getElementById('marketCoin');el.innerHTML='';
-  // 내가 보유한 코인 티커 목록
+  const el=document.getElementById('marketCoin'); if(!el) return; el.innerHTML='';
   const latestAssets=allData[allData.length-1]?.assets||[];
   const myCoins=new Set(latestAssets.filter(a=>a.type==='코인').map(a=>{
-    const m=getAssetMeta(a.name);
-    return COIN_IDS[m.ticker]||COIN_IDS[a.name]||'';
+    const m=getAssetMeta(a.name); return COIN_IDS[m.ticker]||COIN_IDS[a.name]||'';
   }).filter(Boolean));
-
-  for(const c of MARKET_COINS){
-    const data=await fetchCoinData(c.id);
-    if(!data){continue;}
-    const owned=myCoins.has(c.id);
-    renderMarketItem(el,{
-      icon:c.icon, name:c.name, sub:c.sub,
-      priceStr:`${Math.round(data.priceKRW).toLocaleString('ko-KR')}원`,
-      subPrice:`$${data.priceUSD.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
-      change:data.change24h, changePct:data.change24h, owned,
+  try{
+    const ids=MARKET_COINS.map(c=>c.id).join(',');
+    const r=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=krw,usd&include_24hr_change=true`,{signal:marketAbortCtrl?.signal});
+    const d=await r.json();
+    MARKET_COINS.forEach(c=>{
+      const data=d[c.id]; if(!data) return;
+      renderMarketItem(el,{icon:c.icon,name:c.name,sub:c.sub,
+        priceStr:`${Math.round(data.krw).toLocaleString('ko-KR')}원`,
+        subPrice:`$${data.usd.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+        change:data.krw_24h_change||0,changePct:data.krw_24h_change||0,owned:myCoins.has(c.id)});
     });
-  }
+  }catch(e){}
 }
 
+// 내 주식: 모두 동시 조회
 async function fetchMarketMyStocks(){
-  const el=document.getElementById('marketMyStocks');el.innerHTML='';
+  const el=document.getElementById('marketMyStocks'); if(!el) return; el.innerHTML='';
   const latestAssets=allData[allData.length-1]?.assets||[];
-  const myTickers=[...new Set(
-    latestAssets.filter(a=>a.type==='주식').map(a=>{
-      const meta=getAssetMeta(a.name);
-      return {name:a.name, ticker:meta.ticker||TICKER_MAP[a.name]||''};
-    }).filter(t=>t.ticker)
-  )];
-  // 대표주와 겹치는 건 건너뜀
   const majorTickers=new Set(MARKET_STOCKS_MAJOR.map(s=>s.ticker));
-  const unique=myTickers.filter(t=>!majorTickers.has(t.ticker));
-
-  for(const {name,ticker} of unique){
-    const data=await fetchYahooPrice(ticker);
-    if(!data) continue;
-    const isJPY=ticker.endsWith('.T');
-    const rate=isJPY?cachedRates.JPY:cachedRates.USD;
-    const krw=Math.round(data.price*rate*(isJPY?1:1));
-    const sym=isJPY?'¥':'$';
-    renderMarketItem(el,{
-      icon:'📌', name, sub:ticker,
-      priceStr:`${sym}${data.price.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
-      subPrice:`≈ ${krw.toLocaleString('ko-KR')}원`,
-      change:data.change, changePct:data.changePct, owned:true,
-    });
+  const unique=[...new Map(latestAssets.filter(a=>a.type==='주식').map(a=>{
+    const meta=getAssetMeta(a.name);
+    return [a.name,{name:a.name,ticker:meta.ticker||TICKER_MAP[a.name]||''}];
+  })).values()].filter(t=>t.ticker&&!majorTickers.has(t.ticker));
+  if(!unique.length){
+    el.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:8px 10px;">입력 탭에서 티커를 등록하면 여기 표시돼요</div>';
+    return;
   }
-  if(!unique.length) el.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:8px 10px;">입력 탭에서 티커를 등록하면 여기 표시돼요</div>';
+  const results=await Promise.all(unique.map(t=>fetchYahooPrice(t.ticker)));
+  unique.forEach(({name,ticker},i)=>{
+    const data=results[i]; if(!data) return;
+    const isJPY=ticker.endsWith('.T'), sym=isJPY?'¥':'$';
+    const rate=isJPY?cachedRates.JPY:cachedRates.USD;
+    renderMarketItem(el,{icon:'📌',name,sub:ticker,
+      priceStr:`${sym}${data.price.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+      subPrice:`≈ ${Math.round(data.price*rate).toLocaleString('ko-KR')}원`,
+      change:data.change,changePct:data.changePct,owned:true});
+  });
 }
 
+// 대표주: 8개 동시 조회
 async function fetchMarketMajorStocks(){
-  const el=document.getElementById('marketMajor');el.innerHTML='';
+  const el=document.getElementById('marketMajor'); if(!el) return; el.innerHTML='';
   const latestAssets=allData[allData.length-1]?.assets||[];
-  const myTickerSet=new Set(latestAssets.map(a=>{
-    const m=getAssetMeta(a.name);return m.ticker||TICKER_MAP[a.name]||'';
-  }));
-
-  for(const s of MARKET_STOCKS_MAJOR){
-    const data=await fetchYahooPrice(s.ticker);
-    if(!data) continue;
-    const krw=Math.round(data.price*cachedRates.USD);
-    const owned=myTickerSet.has(s.ticker);
-    renderMarketItem(el,{
-      icon:s.icon, name:s.name, sub:s.sub,
+  const myTickerSet=new Set(latestAssets.map(a=>{const m=getAssetMeta(a.name);return m.ticker||TICKER_MAP[a.name]||'';}));
+  const results=await Promise.all(MARKET_STOCKS_MAJOR.map(s=>fetchYahooPrice(s.ticker)));
+  MARKET_STOCKS_MAJOR.forEach((s,i)=>{
+    const data=results[i]; if(!data) return;
+    renderMarketItem(el,{icon:s.icon,name:s.name,sub:s.sub,
       priceStr:`$${data.price.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
-      subPrice:`≈ ${krw.toLocaleString('ko-KR')}원`,
-      change:data.change, changePct:data.changePct, owned,
-    });
-  }
+      subPrice:`≈ ${Math.round(data.price*cachedRates.USD).toLocaleString('ko-KR')}원`,
+      change:data.change,changePct:data.changePct,owned:myTickerSet.has(s.ticker)});
+  });
 }
 
 // ══ TYPE TAGS ══
@@ -2419,6 +2444,9 @@ window.addEventListener('load',()=>{
   render();renderTypeTagsBar();
   fetchExchangeRate().then(()=>loadLastMonth());
   setInterval(fetchExchangeRate,5*60*1000);
+  // 백그라운드 프리로드: 탭 열기 전에 미리 준비
+  setTimeout(()=>{if(!marketCache)_doMarketFetch();},3000);
+  setTimeout(()=>{const a=getMyAssets();if(a.length){const k=a.map(x=>x.name).join(',');if(!issueCache[k])_doIssueFetch(buildAllQueries(a),k);}},5000);
   if(settings.notifEnabled&&settings.goalAmount)scheduleNotification();
 });
 window.addEventListener('resize',renderLineChart);
